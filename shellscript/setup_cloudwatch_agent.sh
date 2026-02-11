@@ -13,17 +13,22 @@ run_aws_cli() {
 
 # 引数チェック
 SERVER_NAME=$1
+shift  # 第1引数を削除し、残りを追加マウントポイントとして扱う
 
 if [ -z "${SERVER_NAME}" ]; then
     echo "エラー: サーバー名を指定してください。"
     echo ""
-    echo "使用方法: $0 <サーバー名>"
+    echo "使用方法: $0 <サーバー名> [追加マウントポイント...]"
     echo ""
     echo "例:"
     echo "  $0 BackupServer"
+    echo "  $0 BackupServer /data /backup"
     echo ""
     exit 1
 fi
+
+# 追加のマウントポイント（第2引数以降）
+ADDITIONAL_MOUNTPOINTS=("$@")
 
 # リージョン設定
 AWS_REGION="ap-northeast-1"
@@ -38,6 +43,11 @@ echo "設定内容:"
 echo "  サーバー名: ${SERVER_NAME}"
 echo "  リージョン: ${AWS_REGION}"
 echo "  メトリクス: CPU, メモリ, ディスク使用率, ディスク空き容量"
+if [ ${#ADDITIONAL_MOUNTPOINTS[@]} -gt 0 ]; then
+    echo "  監視対象ディスク: / ${ADDITIONAL_MOUNTPOINTS[*]}"
+else
+    echo "  監視対象ディスク: /"
+fi
 echo "  ログ: Sambaログ (/var/log/samba/log.smbd, /var/log/samba/log.nmbd)"
 echo "        システムログ (/var/log/messages)"
 echo "  ロググループ名: /onprem/${SERVER_NAME}"
@@ -86,6 +96,13 @@ case ${yn} in
     echo ""
     echo "Step 2: CloudWatch Agent設定ファイルの作成"
 
+    # 監視対象ディスクのJSON配列を構築
+    DISK_RESOURCES='          "/"'
+    for mountpoint in "${ADDITIONAL_MOUNTPOINTS[@]}"; do
+        DISK_RESOURCES="${DISK_RESOURCES},
+          \"${mountpoint}\""
+    done
+
     # 設定ファイルを作成
     sudo bash -c "cat > ${CONFIG_FILE}" <<EOF
 {
@@ -132,7 +149,7 @@ case ${yn} in
         ],
         "metrics_collection_interval": 60,
         "resources": [
-          "/"
+${DISK_RESOURCES}
         ]
       },
       "mem": {

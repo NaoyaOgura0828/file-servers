@@ -43,7 +43,17 @@ CloudWatch Agent をインストール・設定し、メトリクスとログの
 **使用方法:**
 
 ```bash
-sudo ./setup_cloudwatch_agent.sh <サーバー名>
+sudo ./setup_cloudwatch_agent.sh <サーバー名> [追加マウントポイント...]
+```
+
+**例:**
+
+```bash
+# ルートディレクトリのみ監視
+sudo ./setup_cloudwatch_agent.sh BackupServer
+
+# 複数のマウントポイントを監視
+sudo ./setup_cloudwatch_agent.sh BackupServer /data /backup
 ```
 
 **前提:** `create_activation.sh` で作成したアクティベーションを使い、対象サーバーに SSM Agent を登録済みであること。
@@ -70,9 +80,11 @@ sudo ./setup_cloudwatch_agent.sh <サーバー名>
 | `MEM_USED_PERCENT` | メモリ使用率 |
 | `MEM_AVAILABLE` | 利用可能メモリ |
 | `MEM_USED` | 使用中メモリ |
-| `DISK_USED_PERCENT` | ディスク使用率 |
-| `DISK_FREE` | ディスク空き容量 |
-| `DISK_USED` | ディスク使用量 |
+| `DISK_USED_PERCENT` | ディスク使用率（監視対象: `/` + 追加マウントポイント） |
+| `DISK_FREE` | ディスク空き容量（監視対象: `/` + 追加マウントポイント） |
+| `DISK_USED` | ディスク使用量（監視対象: `/` + 追加マウントポイント） |
+
+**監視対象ディスク:** デフォルトで `/` を監視。追加のマウントポイント（例: `/data`, `/backup`）を引数で指定可能。
 
 **収集ログ（ロググループ: `/onprem/<サーバー名>`）:**
 
