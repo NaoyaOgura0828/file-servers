@@ -1,0 +1,23 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: IAM Role
+
+Resources:
+  SSMCloudWatchAgentRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: SSMCloudWatchAgentRole
+      Description: IAM Role for SSM Managed Instances with CloudWatch Agent
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+        - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Sid: AllowSSMService
+            Effect: Allow
+            Action: sts:AssumeRole
+            Principal:
+              Service: ssm.amazonaws.com
+      Tags:
+        - Key: Name
+          Value: SSMCloudWatchAgentRole
