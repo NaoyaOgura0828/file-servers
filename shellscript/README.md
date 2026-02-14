@@ -31,13 +31,13 @@ sudo ./setup_cloudwatch_agent.sh config/FileServer.conf
 sudo ./install_logrotate.sh
 
 # 6. rsyncスクリプトの動作確認
-~/rsync_fileserver.sh
+sudo ./rsync_fileserver.sh
 sudo tail -f /var/log/rsync/rsync_fileserver.log
 
-# 7. crontabに定期実行を設定（既に設定済みの場合はスキップ）
+# 7. crontabに定期実行を設定
 crontab -e
-# 以下を追加:
-# 0 * * * * ~/rsync_fileserver.sh
+# 以下を追加（毎時0分に実行）:
+# 0 * * * * sudo /home/NaoyaOgura/file-servers/shellscript/rsync_fileserver.sh
 ```
 
 ## ディレクトリ構成
@@ -47,10 +47,12 @@ shellscript/
 ├── config/                         # 設定ファイル
 │   ├── sample.conf                 # CloudWatch Agent設定のサンプル
 │   ├── FileServer.conf             # FileServer用のCloudWatch Agent設定
+│   ├── BackupServer.conf           # BackupServer用のCloudWatch Agent設定
 │   └── rsync_logrotate.conf        # rsyncログのローテーション設定
 ├── create_activation.sh            # SSMハイブリッドアクティベーション作成
 ├── setup_cloudwatch_agent.sh       # CloudWatch Agentセットアップ
 ├── install_logrotate.sh            # ログローテーション設定インストール
+├── rsync_fileserver.sh             # rsyncバックアップスクリプト
 └── README.md                       # このファイル
 ```
 
@@ -257,6 +259,77 @@ sudo logrotate -d /etc/logrotate.d/rsync_fileserver
 
 ---
 
+### 4. rsync_fileserver.sh
+
+rsyncを使用してファイルサーバーのバックアップを実行する。
+
+**使用方法:**
+
+```bash
+sudo ./rsync_fileserver.sh
+```
+
+**処理内容:**
+
+1. root権限チェック
+2. ロックファイルによる重複実行の防止
+3. ソース・宛先ディレクトリの存在確認
+4. rsyncの実行（完全同期）
+5. 実行時間と終了ステータスの記録
+6. ログファイルへの詳細な実行記録
+
+**バックアップ設定:**
+
+| 項目 | 設定値 |
+|------|--------|
+| ソース | `/mnt/fileserver/` |
+| 宛先 | `/mnt/fileserver-backup/` |
+| ログファイル | `/var/log/rsync/rsync_fileserver.log` |
+| ロックファイル | `/var/run/rsync_fileserver.lock` |
+
+**rsyncオプション:**
+
+- `-a`: アーカイブモード（パーミッション、タイムスタンプ等を保持）
+- `-h`: 人間が読みやすい形式
+- `-v`: 詳細表示
+- `--progress`: 進捗表示
+- `--delete`: 宛先にのみ存在するファイルを削除（完全同期）
+- `--stats`: 統計情報を表示
+
+**特徴:**
+
+1. **ロック機構**: 重複実行を防止。既に実行中の場合はエラーで終了
+2. **エラーハンドリング**: ソース・宛先の存在確認、rsync失敗時の記録
+3. **実行時間記録**: 開始時刻、終了時刻、経過時間をログに記録
+4. **完全同期**: `--delete`オプションでソースと宛先を完全に同期
+
+**crontab設定例:**
+
+```bash
+# 毎時0分に実行
+0 * * * * sudo /home/NaoyaOgura/file-servers/shellscript/rsync_fileserver.sh
+```
+
+**ログの確認:**
+
+```bash
+# リアルタイムでログを確認
+sudo tail -f /var/log/rsync/rsync_fileserver.log
+
+# 実行履歴を確認
+sudo grep "rsync開始\|rsync終了" /var/log/rsync/rsync_fileserver.log
+
+# 最新の実行結果を確認
+sudo tail -50 /var/log/rsync/rsync_fileserver.log
+```
+
+**注意:**
+- このスクリプトはsudo権限で実行する必要があります
+- 実行中は別のインスタンスが起動できません（ロック機構）
+- ログファイルは`install_logrotate.sh`でローテーション設定することを推奨
+
+---
+
 ## rsyncログのCloudWatch監視設定
 
 rsyncのログを固定ファイルに出力し、CloudWatchで監視する場合は以下の手順を実行してください。
@@ -363,9 +436,11 @@ LOG_PATHS="/var/log/httpd/access_log:apache-access /var/log/httpd/error_log:apac
         ↓
 3. setup_cloudwatch_agent.sh <設定ファイル> （対象サーバーで実行）
         ↓
-   （オプション）install_logrotate.sh （rsyncログのローテーション設定）
+4. install_logrotate.sh （rsyncログのローテーション設定）
         ↓
-4. rsync_fileserver.sh の定期実行（cron）
+5. rsync_fileserver.sh の手動実行テスト
+        ↓
+6. crontabに rsync_fileserver.sh を登録（定期実行）
 ```
 
 ---
