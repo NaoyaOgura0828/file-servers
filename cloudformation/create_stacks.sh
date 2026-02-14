@@ -30,7 +30,7 @@ create_stack() {
 #####################################
 # 構築対象リソース
 #####################################
-# IAMロールスタックの作成
 # create_stack iam-role
+# create_stack cloudwatch-dashboard
 
 exit 0

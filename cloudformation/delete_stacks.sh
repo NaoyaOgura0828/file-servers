@@ -35,7 +35,7 @@ case ${yn} in
     #####################################
     # 削除対象リソース
     #####################################
-    # IAMロールスタックの削除
+    # delete_stack cloudwatch-dashboard
     # delete_stack iam-role
 
     echo '削除が完了しました。'

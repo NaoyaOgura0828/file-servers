@@ -1,0 +1,636 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: CloudWatch Dashboard
+
+Resources:
+  FileServerDashboard:
+    Type: AWS::CloudWatch::Dashboard
+    Properties:
+      DashboardName: FileServer
+      DashboardBody: !Sub |
+        {
+          "widgets": [
+            {
+              "type": "metric",
+              "properties": {
+                "metrics": [
+                  [ "OnPremises/FileServer", "CPU_IDLE", "host", "fileserver", "cpu", "cpu-total", { "stat": "Average", "label": "CPU Idle (%)" } ],
+                  [ ".", "CPU_IOWAIT", ".", ".", ".", ".", { "stat": "Average", "label": "CPU IO Wait (%)" } ]
+                ],
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "${AWS::Region}",
+                "title": "CPU使用状況",
+                "period": 300,
+                "yAxis": {
+                  "left": {
+                    "min": 0,
+                    "max": 100
+                  }
+                }
+              },
+              "width": 12,
+              "height": 6,
+              "x": 0,
+              "y": 0
+            },
+            {
+              "type": "metric",
+              "properties": {
+                "metrics": [
+                  [ "OnPremises/FileServer", "MEM_USED_PERCENT", "host", "fileserver", { "stat": "Average", "label": "メモリ使用率 (%)" } ]
+                ],
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "${AWS::Region}",
+                "title": "メモリ使用率",
+                "period": 300,
+                "yAxis": {
+                  "left": {
+                    "min": 0,
+                    "max": 100
+                  }
+                }
+              },
+              "width": 12,
+              "height": 6,
+              "x": 12,
+              "y": 0
+            },
+            {
+              "type": "metric",
+              "properties": {
+                "metrics": [
+                  [ "OnPremises/FileServer", "MEM_AVAILABLE", "host", "fileserver", { "stat": "Average", "label": "利用可能メモリ" } ],
+                  [ ".", "MEM_USED", ".", ".", { "stat": "Average", "label": "使用中メモリ" } ]
+                ],
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "${AWS::Region}",
+                "title": "メモリ使用量 (Bytes)",
+                "period": 300,
+                "yAxis": {
+                  "left": {
+                    "min": 0
+                  }
+                }
+              },
+              "width": 12,
+              "height": 6,
+              "x": 0,
+              "y": 6
+            },
+            {
+              "type": "metric",
+              "properties": {
+                "metrics": [
+                  [ "OnPremises/FileServer", "SWAP_USED_PERCENT", "host", "fileserver", { "stat": "Average", "label": "Swap使用率 (%)" } ]
+                ],
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "${AWS::Region}",
+                "title": "Swap使用率",
+                "period": 300,
+                "yAxis": {
+                  "left": {
+                    "min": 0,
+                    "max": 100
+                  }
+                }
+              },
+              "width": 12,
+              "height": 6,
+              "x": 12,
+              "y": 6
+            },
+            {
+              "type": "metric",
+              "properties": {
+                "metrics": [
+                  [ { "expression": "SEARCH('{OnPremises/FileServer,host,path,device,fstype} MetricName=\"DISK_USED_PERCENT\" host=\"fileserver\"', 'Average', 300)", "label": "${!PROP(\"path\")}", "id": "e1" } ]
+                ],
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "${AWS::Region}",
+                "title": "ディスク使用率 (%)",
+                "period": 300,
+                "yAxis": {
+                  "left": {
+                    "min": 0,
+                    "max": 100
+                  }
+                }
+              },
+              "width": 12,
+              "height": 6,
+              "x": 0,
+              "y": 12
+            },
+            {
+              "type": "metric",
+              "properties": {
+                "metrics": [
+                  [ { "expression": "SEARCH('{OnPremises/FileServer,host,path,device,fstype} MetricName=\"DISK_FREE\" host=\"fileserver\"', 'Average', 300)", "label": "空き ${!PROP(\"path\")}", "id": "e1" } ],
+                  [ { "expression": "SEARCH('{OnPremises/FileServer,host,path,device,fstype} MetricName=\"DISK_USED\" host=\"fileserver\"', 'Average', 300)", "label": "使用中 ${!PROP(\"path\")}", "id": "e2" } ]
+                ],
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "${AWS::Region}",
+                "title": "ディスク容量 (Bytes)",
+                "period": 300,
+                "yAxis": {
+                  "left": {
+                    "min": 0
+                  }
+                }
+              },
+              "width": 12,
+              "height": 6,
+              "x": 12,
+              "y": 12
+            },
+            {
+              "type": "metric",
+              "properties": {
+                "metrics": [
+                  [ { "expression": "SEARCH('{OnPremises/FileServer,host,path,device,fstype} MetricName=\"DISK_INODES_USED\" host=\"fileserver\"', 'Average', 300)", "label": "使用中 ${!PROP(\"path\")}", "id": "e1" } ],
+                  [ { "expression": "SEARCH('{OnPremises/FileServer,host,path,device,fstype} MetricName=\"DISK_INODES_FREE\" host=\"fileserver\"', 'Average', 300)", "label": "空き ${!PROP(\"path\")}", "id": "e2" } ]
+                ],
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "${AWS::Region}",
+                "title": "inode使用状況",
+                "period": 300,
+                "yAxis": {
+                  "left": {
+                    "min": 0
+                  }
+                }
+              },
+              "width": 12,
+              "height": 6,
+              "x": 0,
+              "y": 18
+            },
+            {
+              "type": "metric",
+              "properties": {
+                "metrics": [
+                  [ "OnPremises/FileServer", "DISKIO_READ_BYTES", "host", "fileserver", "name", "dm-0", { "stat": "Sum", "label": "読み込み dm-0" } ],
+                  [ ".", ".", ".", ".", ".", "dm-1", { "stat": "Sum", "label": "読み込み dm-1" } ],
+                  [ ".", "DISKIO_WRITE_BYTES", ".", ".", ".", "dm-0", { "stat": "Sum", "label": "書き込み dm-0" } ],
+                  [ ".", ".", ".", ".", ".", "dm-1", { "stat": "Sum", "label": "書き込み dm-1" } ]
+                ],
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "${AWS::Region}",
+                "title": "ディスクI/O - データ量",
+                "period": 300,
+                "yAxis": {
+                  "left": {
+                    "min": 0
+                  }
+                }
+              },
+              "width": 12,
+              "height": 6,
+              "x": 12,
+              "y": 18
+            },
+            {
+              "type": "metric",
+              "properties": {
+                "metrics": [
+                  [ "OnPremises/FileServer", "DISKIO_READS", "host", "fileserver", "name", "dm-0", { "stat": "Sum", "label": "読み込み dm-0" } ],
+                  [ ".", ".", ".", ".", ".", "dm-1", { "stat": "Sum", "label": "読み込み dm-1" } ],
+                  [ ".", "DISKIO_WRITES", ".", ".", ".", "dm-0", { "stat": "Sum", "label": "書き込み dm-0" } ],
+                  [ ".", ".", ".", ".", ".", "dm-1", { "stat": "Sum", "label": "書き込み dm-1" } ]
+                ],
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "${AWS::Region}",
+                "title": "ディスクI/O - 操作回数",
+                "period": 300,
+                "yAxis": {
+                  "left": {
+                    "min": 0
+                  }
+                }
+              },
+              "width": 12,
+              "height": 6,
+              "x": 0,
+              "y": 24
+            },
+            {
+              "type": "metric",
+              "properties": {
+                "metrics": [
+                  [ "OnPremises/FileServer", "DISKIO_READ_TIME", "host", "fileserver", "name", "dm-0", { "stat": "Sum", "label": "読み込み dm-0" } ],
+                  [ ".", ".", ".", ".", ".", "dm-1", { "stat": "Sum", "label": "読み込み dm-1" } ],
+                  [ ".", "DISKIO_WRITE_TIME", ".", ".", ".", "dm-0", { "stat": "Sum", "label": "書き込み dm-0" } ],
+                  [ ".", ".", ".", ".", ".", "dm-1", { "stat": "Sum", "label": "書き込み dm-1" } ],
+                  [ ".", "DISKIO_IO_TIME", ".", ".", ".", "dm-0", { "stat": "Sum", "label": "I/O dm-0" } ],
+                  [ ".", ".", ".", ".", ".", "dm-1", { "stat": "Sum", "label": "I/O dm-1" } ]
+                ],
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "${AWS::Region}",
+                "title": "ディスクI/O - 処理時間 (ms)",
+                "period": 300,
+                "yAxis": {
+                  "left": {
+                    "min": 0
+                  }
+                }
+              },
+              "width": 12,
+              "height": 6,
+              "x": 12,
+              "y": 24
+            },
+            {
+              "type": "metric",
+              "properties": {
+                "metrics": [
+                  [ { "expression": "SEARCH('{OnPremises/FileServer,host,interface} MetricName=\"NET_BYTES_SENT\" host=\"fileserver\"', 'Sum', 300)", "label": "送信 ${!PROP(\"interface\")}", "id": "e1" } ],
+                  [ { "expression": "SEARCH('{OnPremises/FileServer,host,interface} MetricName=\"NET_BYTES_RECV\" host=\"fileserver\"', 'Sum', 300)", "label": "受信 ${!PROP(\"interface\")}", "id": "e2" } ]
+                ],
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "${AWS::Region}",
+                "title": "ネットワーク - データ量",
+                "period": 300,
+                "yAxis": {
+                  "left": {
+                    "min": 0
+                  }
+                }
+              },
+              "width": 12,
+              "height": 6,
+              "x": 0,
+              "y": 30
+            },
+            {
+              "type": "metric",
+              "properties": {
+                "metrics": [
+                  [ { "expression": "SEARCH('{OnPremises/FileServer,host,interface} MetricName=\"NET_PACKETS_SENT\" host=\"fileserver\"', 'Sum', 300)", "label": "送信 ${!PROP(\"interface\")}", "id": "e1" } ],
+                  [ { "expression": "SEARCH('{OnPremises/FileServer,host,interface} MetricName=\"NET_PACKETS_RECV\" host=\"fileserver\"', 'Sum', 300)", "label": "受信 ${!PROP(\"interface\")}", "id": "e2" } ]
+                ],
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "${AWS::Region}",
+                "title": "ネットワーク - パケット数",
+                "period": 300,
+                "yAxis": {
+                  "left": {
+                    "min": 0
+                  }
+                }
+              },
+              "width": 12,
+              "height": 6,
+              "x": 12,
+              "y": 30
+            },
+            {
+              "type": "metric",
+              "properties": {
+                "metrics": [
+                  [ { "expression": "SEARCH('{OnPremises/FileServer,host,interface} MetricName=\"NET_ERR_IN\" host=\"fileserver\"', 'Sum', 300)", "label": "受信エラー ${!PROP(\"interface\")}", "id": "e1" } ],
+                  [ { "expression": "SEARCH('{OnPremises/FileServer,host,interface} MetricName=\"NET_ERR_OUT\" host=\"fileserver\"', 'Sum', 300)", "label": "送信エラー ${!PROP(\"interface\")}", "id": "e2" } ],
+                  [ { "expression": "SEARCH('{OnPremises/FileServer,host,interface} MetricName=\"NET_DROP_IN\" host=\"fileserver\"', 'Sum', 300)", "label": "受信ドロップ ${!PROP(\"interface\")}", "id": "e3" } ],
+                  [ { "expression": "SEARCH('{OnPremises/FileServer,host,interface} MetricName=\"NET_DROP_OUT\" host=\"fileserver\"', 'Sum', 300)", "label": "送信ドロップ ${!PROP(\"interface\")}", "id": "e4" } ]
+                ],
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "${AWS::Region}",
+                "title": "ネットワーク - エラー/ドロップ",
+                "period": 300,
+                "yAxis": {
+                  "left": {
+                    "min": 0
+                  }
+                }
+              },
+              "width": 24,
+              "height": 6,
+              "x": 0,
+              "y": 36
+            }
+          ]
+        }
+
+  BackupServerDashboard:
+    Type: AWS::CloudWatch::Dashboard
+    Properties:
+      DashboardName: BackupServer
+      DashboardBody: !Sub |
+        {
+          "widgets": [
+            {
+              "type": "metric",
+              "properties": {
+                "metrics": [
+                  [ "OnPremises/BackupServer", "CPU_IDLE", "host", "backupserver", "cpu", "cpu-total", { "stat": "Average", "label": "CPU Idle (%)" } ],
+                  [ ".", "CPU_IOWAIT", ".", ".", ".", ".", { "stat": "Average", "label": "CPU IO Wait (%)" } ]
+                ],
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "${AWS::Region}",
+                "title": "CPU使用状況",
+                "period": 300,
+                "yAxis": {
+                  "left": {
+                    "min": 0,
+                    "max": 100
+                  }
+                }
+              },
+              "width": 12,
+              "height": 6,
+              "x": 0,
+              "y": 0
+            },
+            {
+              "type": "metric",
+              "properties": {
+                "metrics": [
+                  [ "OnPremises/BackupServer", "MEM_USED_PERCENT", "host", "backupserver", { "stat": "Average", "label": "メモリ使用率 (%)" } ]
+                ],
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "${AWS::Region}",
+                "title": "メモリ使用率",
+                "period": 300,
+                "yAxis": {
+                  "left": {
+                    "min": 0,
+                    "max": 100
+                  }
+                }
+              },
+              "width": 12,
+              "height": 6,
+              "x": 12,
+              "y": 0
+            },
+            {
+              "type": "metric",
+              "properties": {
+                "metrics": [
+                  [ "OnPremises/BackupServer", "MEM_AVAILABLE", "host", "backupserver", { "stat": "Average", "label": "利用可能メモリ" } ],
+                  [ ".", "MEM_USED", ".", ".", { "stat": "Average", "label": "使用中メモリ" } ]
+                ],
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "${AWS::Region}",
+                "title": "メモリ使用量 (Bytes)",
+                "period": 300,
+                "yAxis": {
+                  "left": {
+                    "min": 0
+                  }
+                }
+              },
+              "width": 12,
+              "height": 6,
+              "x": 0,
+              "y": 6
+            },
+            {
+              "type": "metric",
+              "properties": {
+                "metrics": [
+                  [ "OnPremises/BackupServer", "SWAP_USED_PERCENT", "host", "backupserver", { "stat": "Average", "label": "Swap使用率 (%)" } ]
+                ],
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "${AWS::Region}",
+                "title": "Swap使用率",
+                "period": 300,
+                "yAxis": {
+                  "left": {
+                    "min": 0,
+                    "max": 100
+                  }
+                }
+              },
+              "width": 12,
+              "height": 6,
+              "x": 12,
+              "y": 6
+            },
+            {
+              "type": "metric",
+              "properties": {
+                "metrics": [
+                  [ { "expression": "SEARCH('{OnPremises/BackupServer,host,path,device,fstype} MetricName=\"DISK_USED_PERCENT\" host=\"backupserver\"', 'Average', 300)", "label": "${!PROP(\"path\")}", "id": "e1" } ]
+                ],
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "${AWS::Region}",
+                "title": "ディスク使用率 (%)",
+                "period": 300,
+                "yAxis": {
+                  "left": {
+                    "min": 0,
+                    "max": 100
+                  }
+                }
+              },
+              "width": 12,
+              "height": 6,
+              "x": 0,
+              "y": 12
+            },
+            {
+              "type": "metric",
+              "properties": {
+                "metrics": [
+                  [ { "expression": "SEARCH('{OnPremises/BackupServer,host,path,device,fstype} MetricName=\"DISK_FREE\" host=\"backupserver\"', 'Average', 300)", "label": "空き ${!PROP(\"path\")}", "id": "e1" } ],
+                  [ { "expression": "SEARCH('{OnPremises/BackupServer,host,path,device,fstype} MetricName=\"DISK_USED\" host=\"backupserver\"', 'Average', 300)", "label": "使用中 ${!PROP(\"path\")}", "id": "e2" } ]
+                ],
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "${AWS::Region}",
+                "title": "ディスク容量 (Bytes)",
+                "period": 300,
+                "yAxis": {
+                  "left": {
+                    "min": 0
+                  }
+                }
+              },
+              "width": 12,
+              "height": 6,
+              "x": 12,
+              "y": 12
+            },
+            {
+              "type": "metric",
+              "properties": {
+                "metrics": [
+                  [ { "expression": "SEARCH('{OnPremises/BackupServer,host,path,device,fstype} MetricName=\"DISK_INODES_USED\" host=\"backupserver\"', 'Average', 300)", "label": "使用中 ${!PROP(\"path\")}", "id": "e1" } ],
+                  [ { "expression": "SEARCH('{OnPremises/BackupServer,host,path,device,fstype} MetricName=\"DISK_INODES_FREE\" host=\"backupserver\"', 'Average', 300)", "label": "空き ${!PROP(\"path\")}", "id": "e2" } ]
+                ],
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "${AWS::Region}",
+                "title": "inode使用状況",
+                "period": 300,
+                "yAxis": {
+                  "left": {
+                    "min": 0
+                  }
+                }
+              },
+              "width": 12,
+              "height": 6,
+              "x": 0,
+              "y": 18
+            },
+            {
+              "type": "metric",
+              "properties": {
+                "metrics": [
+                  [ "OnPremises/BackupServer", "DISKIO_READ_BYTES", "host", "backupserver", "name", "dm-0", { "stat": "Sum", "label": "読み込み" } ],
+                  [ ".", "DISKIO_WRITE_BYTES", ".", ".", ".", ".", { "stat": "Sum", "label": "書き込み" } ]
+                ],
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "${AWS::Region}",
+                "title": "ディスクI/O - データ量",
+                "period": 300,
+                "yAxis": {
+                  "left": {
+                    "min": 0
+                  }
+                }
+              },
+              "width": 12,
+              "height": 6,
+              "x": 12,
+              "y": 18
+            },
+            {
+              "type": "metric",
+              "properties": {
+                "metrics": [
+                  [ "OnPremises/BackupServer", "DISKIO_READS", "host", "backupserver", "name", "dm-0", { "stat": "Sum", "label": "読み込み" } ],
+                  [ ".", "DISKIO_WRITES", ".", ".", ".", ".", { "stat": "Sum", "label": "書き込み" } ]
+                ],
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "${AWS::Region}",
+                "title": "ディスクI/O - 操作回数",
+                "period": 300,
+                "yAxis": {
+                  "left": {
+                    "min": 0
+                  }
+                }
+              },
+              "width": 12,
+              "height": 6,
+              "x": 0,
+              "y": 24
+            },
+            {
+              "type": "metric",
+              "properties": {
+                "metrics": [
+                  [ "OnPremises/BackupServer", "DISKIO_READ_TIME", "host", "backupserver", "name", "dm-0", { "stat": "Sum", "label": "読み込み" } ],
+                  [ ".", "DISKIO_WRITE_TIME", ".", ".", ".", ".", { "stat": "Sum", "label": "書き込み" } ],
+                  [ ".", "DISKIO_IO_TIME", ".", ".", ".", ".", { "stat": "Sum", "label": "I/O" } ]
+                ],
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "${AWS::Region}",
+                "title": "ディスクI/O - 処理時間 (ms)",
+                "period": 300,
+                "yAxis": {
+                  "left": {
+                    "min": 0
+                  }
+                }
+              },
+              "width": 12,
+              "height": 6,
+              "x": 12,
+              "y": 24
+            },
+            {
+              "type": "metric",
+              "properties": {
+                "metrics": [
+                  [ { "expression": "SEARCH('{OnPremises/BackupServer,host,interface} MetricName=\"NET_BYTES_SENT\" host=\"backupserver\"', 'Sum', 300)", "label": "送信 ${!PROP(\"interface\")}", "id": "e1" } ],
+                  [ { "expression": "SEARCH('{OnPremises/BackupServer,host,interface} MetricName=\"NET_BYTES_RECV\" host=\"backupserver\"', 'Sum', 300)", "label": "受信 ${!PROP(\"interface\")}", "id": "e2" } ]
+                ],
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "${AWS::Region}",
+                "title": "ネットワーク - データ量",
+                "period": 300,
+                "yAxis": {
+                  "left": {
+                    "min": 0
+                  }
+                }
+              },
+              "width": 12,
+              "height": 6,
+              "x": 0,
+              "y": 30
+            },
+            {
+              "type": "metric",
+              "properties": {
+                "metrics": [
+                  [ { "expression": "SEARCH('{OnPremises/BackupServer,host,interface} MetricName=\"NET_PACKETS_SENT\" host=\"backupserver\"', 'Sum', 300)", "label": "送信 ${!PROP(\"interface\")}", "id": "e1" } ],
+                  [ { "expression": "SEARCH('{OnPremises/BackupServer,host,interface} MetricName=\"NET_PACKETS_RECV\" host=\"backupserver\"', 'Sum', 300)", "label": "受信 ${!PROP(\"interface\")}", "id": "e2" } ]
+                ],
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "${AWS::Region}",
+                "title": "ネットワーク - パケット数",
+                "period": 300,
+                "yAxis": {
+                  "left": {
+                    "min": 0
+                  }
+                }
+              },
+              "width": 12,
+              "height": 6,
+              "x": 12,
+              "y": 30
+            },
+            {
+              "type": "metric",
+              "properties": {
+                "metrics": [
+                  [ { "expression": "SEARCH('{OnPremises/BackupServer,host,interface} MetricName=\"NET_ERR_IN\" host=\"backupserver\"', 'Sum', 300)", "label": "受信エラー ${!PROP(\"interface\")}", "id": "e1" } ],
+                  [ { "expression": "SEARCH('{OnPremises/BackupServer,host,interface} MetricName=\"NET_ERR_OUT\" host=\"backupserver\"', 'Sum', 300)", "label": "送信エラー ${!PROP(\"interface\")}", "id": "e2" } ],
+                  [ { "expression": "SEARCH('{OnPremises/BackupServer,host,interface} MetricName=\"NET_DROP_IN\" host=\"backupserver\"', 'Sum', 300)", "label": "受信ドロップ ${!PROP(\"interface\")}", "id": "e3" } ],
+                  [ { "expression": "SEARCH('{OnPremises/BackupServer,host,interface} MetricName=\"NET_DROP_OUT\" host=\"backupserver\"', 'Sum', 300)", "label": "送信ドロップ ${!PROP(\"interface\")}", "id": "e4" } ]
+                ],
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "${AWS::Region}",
+                "title": "ネットワーク - エラー/ドロップ",
+                "period": 300,
+                "yAxis": {
+                  "left": {
+                    "min": 0
+                  }
+                }
+              },
+              "width": 24,
+              "height": 6,
+              "x": 0,
+              "y": 36
+            }
+          ]
+        }
