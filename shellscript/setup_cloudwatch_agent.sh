@@ -11,24 +11,126 @@ run_aws_cli() {
     fi
 }
 
-# 引数チェック
-SERVER_NAME=$1
-shift  # 第1引数を削除し、残りを追加マウントポイントとして扱う
+# ヘルプメッセージを表示する関数
+show_help() {
+    cat << EOF
+使用方法: $0 <設定ファイルパス>
 
-if [ -z "${SERVER_NAME}" ]; then
-    echo "エラー: サーバー名を指定してください。"
+CloudWatch Agentをインストール・設定し、メトリクスとログの収集を開始します。
+
+引数:
+  <設定ファイルパス>            設定ファイルのパス（必須）
+
+オプション:
+  -h, --help                    このヘルプメッセージを表示
+
+例:
+  # 設定ファイルを指定して実行
+  $0 config/FileServer.conf
+
+  # 絶対パスでも指定可能
+  $0 /home/user/file-servers/shellscript/config/FileServer.conf
+
+デフォルトで監視されるログ:
+  - /var/log/samba/log.smbd (ログストリーム: smbd)
+  - /var/log/samba/log.nmbd (ログストリーム: nmbd)
+  - /var/log/messages (ログストリーム: messages)
+
+設定ファイルの形式:
+  SERVER_NAME="FileServer"
+  MOUNTPOINTS="/mnt/data /mnt/backup"
+  LOG_PATHS="/var/log/rsync/rsync.log:rsync-backup"
+
+設定ファイルの例は config/sample.conf を参照してください。
+
+注意:
+  - このスクリプトはsudo権限で実行する必要があります
+  - SSM Agentが事前に登録されている必要があります
+
+EOF
+    exit 0
+}
+
+# 引数の初期化
+CONFIG_FILE=""
+SERVER_NAME=""
+MOUNTPOINTS=""
+LOG_PATHS=""
+ADDITIONAL_MOUNTPOINTS=()
+CUSTOM_LOG_PATHS=()
+
+# 引数をパース
+if [[ $# -eq 0 ]]; then
+    echo "エラー: 設定ファイルを指定してください。"
     echo ""
-    echo "使用方法: $0 <サーバー名> [追加マウントポイント...]"
-    echo ""
-    echo "例:"
-    echo "  $0 BackupServer"
-    echo "  $0 BackupServer /data /backup"
+    echo "使用方法: $0 <設定ファイルパス>"
+    echo "詳細は '$0 --help' を実行してください。"
     echo ""
     exit 1
 fi
 
-# 追加のマウントポイント（第2引数以降）
-ADDITIONAL_MOUNTPOINTS=("$@")
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        -h|--help)
+            show_help
+            ;;
+        *)
+            # 最初の引数を設定ファイルとして扱う
+            if [ -z "${CONFIG_FILE}" ]; then
+                CONFIG_FILE="$1"
+            else
+                echo "エラー: 複数の引数が指定されています。"
+                echo "設定ファイルのパスのみを指定してください。"
+                echo ""
+                exit 1
+            fi
+            shift
+            ;;
+    esac
+done
+
+# 設定ファイルのパス解決（相対パス対応）
+if [ ! -f "${CONFIG_FILE}" ]; then
+    SCRIPT_DIR=$(cd $(dirname $0) && pwd)
+    CONFIG_FILE="${SCRIPT_DIR}/${CONFIG_FILE}"
+fi
+
+if [ ! -f "${CONFIG_FILE}" ]; then
+    echo "エラー: 設定ファイルが見つかりません: ${CONFIG_FILE}"
+    echo ""
+    echo "設定ファイルの例は config/sample.conf を参照してください。"
+    exit 1
+fi
+
+# 設定ファイルを読み込み
+echo "設定ファイルを読み込みます: ${CONFIG_FILE}"
+source "${CONFIG_FILE}"
+echo ""
+
+# 設定ファイルから読み込んだMOUNTPOINTSとLOG_PATHSを配列に変換
+if [ -n "${MOUNTPOINTS}" ]; then
+    for mp in ${MOUNTPOINTS}; do
+        ADDITIONAL_MOUNTPOINTS+=("${mp}")
+    done
+fi
+
+if [ -n "${LOG_PATHS}" ]; then
+    for lp in ${LOG_PATHS}; do
+        CUSTOM_LOG_PATHS+=("${lp}")
+    done
+fi
+
+# 必須パラメータのチェック
+if [ -z "${SERVER_NAME}" ]; then
+    echo "エラー: 設定ファイルにSERVER_NAMEが定義されていません。"
+    echo ""
+    echo "設定ファイルの形式:"
+    echo '  SERVER_NAME="FileServer"'
+    echo '  MOUNTPOINTS="/mnt/data /mnt/backup"'
+    echo '  LOG_PATHS="/var/log/rsync/rsync.log:rsync-backup"'
+    echo ""
+    exit 1
+fi
 
 # リージョン設定
 AWS_REGION="ap-northeast-1"
@@ -50,6 +152,16 @@ else
 fi
 echo "  ログ: Sambaログ (/var/log/samba/log.smbd, /var/log/samba/log.nmbd)"
 echo "        システムログ (/var/log/messages)"
+if [ ${#CUSTOM_LOG_PATHS[@]} -gt 0 ]; then
+    echo "  カスタムログ:"
+    for log_spec in "${CUSTOM_LOG_PATHS[@]}"; do
+        IFS=':' read -r log_file log_stream <<< "${log_spec}"
+        if [ -z "${log_stream}" ]; then
+            log_stream=$(basename "${log_file}" | sed 's/\.[^.]*$//')
+        fi
+        echo "        ${log_file} (ストリーム: ${log_stream})"
+    done
+fi
 echo "  ロググループ名: /onprem/${SERVER_NAME}"
 echo "------------------------------------------------------------------------------------------------------------------------------------------------------"
 echo ""
@@ -103,6 +215,33 @@ case ${yn} in
           \"${mountpoint}\""
     done
 
+    # カスタムログパスのJSON配列を構築
+    CUSTOM_LOGS_JSON=""
+    for log_spec in "${CUSTOM_LOG_PATHS[@]}"; do
+        # フォーマット: <ファイルパス>:<ログストリーム名>
+        IFS=':' read -r log_file log_stream <<< "${log_spec}"
+
+        # ログファイルの存在確認
+        if [ ! -f "${log_file}" ]; then
+            echo "警告: ログファイルが見つかりません: ${log_file}"
+            echo "      このログファイルは設定に含めますが、ファイルが存在しない場合はログ収集されません。"
+        fi
+
+        # ログストリーム名が指定されていない場合はファイル名から生成
+        if [ -z "${log_stream}" ]; then
+            log_stream=$(basename "${log_file}" | sed 's/\.[^.]*$//')
+        fi
+
+        # JSON要素を追加（カンマ区切り）
+        CUSTOM_LOGS_JSON="${CUSTOM_LOGS_JSON},
+          {
+            \"file_path\": \"${log_file}\",
+            \"log_group_name\": \"/onprem/${SERVER_NAME}\",
+            \"log_stream_name\": \"${log_stream}\",
+            \"timezone\": \"Local\"
+          }"
+    done
+
     # 設定ファイルを作成
     sudo bash -c "cat > ${CONFIG_FILE}" <<EOF
 {
@@ -145,6 +284,21 @@ case ${yn} in
             "name": "used",
             "rename": "DISK_USED",
             "unit": "Bytes"
+          },
+          {
+            "name": "inodes_used",
+            "rename": "DISK_INODES_USED",
+            "unit": "Count"
+          },
+          {
+            "name": "inodes_free",
+            "rename": "DISK_INODES_FREE",
+            "unit": "Count"
+          },
+          {
+            "name": "inodes_total",
+            "rename": "DISK_INODES_TOTAL",
+            "unit": "Count"
           }
         ],
         "metrics_collection_interval": 60,
@@ -167,6 +321,117 @@ ${DISK_RESOURCES}
           {
             "name": "mem_used",
             "rename": "MEM_USED",
+            "unit": "Bytes"
+          }
+        ],
+        "metrics_collection_interval": 60
+      },
+      "diskio": {
+        "measurement": [
+          {
+            "name": "read_bytes",
+            "rename": "DISKIO_READ_BYTES",
+            "unit": "Bytes"
+          },
+          {
+            "name": "write_bytes",
+            "rename": "DISKIO_WRITE_BYTES",
+            "unit": "Bytes"
+          },
+          {
+            "name": "reads",
+            "rename": "DISKIO_READS",
+            "unit": "Count"
+          },
+          {
+            "name": "writes",
+            "rename": "DISKIO_WRITES",
+            "unit": "Count"
+          },
+          {
+            "name": "read_time",
+            "rename": "DISKIO_READ_TIME",
+            "unit": "Milliseconds"
+          },
+          {
+            "name": "write_time",
+            "rename": "DISKIO_WRITE_TIME",
+            "unit": "Milliseconds"
+          },
+          {
+            "name": "io_time",
+            "rename": "DISKIO_IO_TIME",
+            "unit": "Milliseconds"
+          }
+        ],
+        "metrics_collection_interval": 60,
+        "resources": [
+          "*"
+        ]
+      },
+      "net": {
+        "measurement": [
+          {
+            "name": "bytes_sent",
+            "rename": "NET_BYTES_SENT",
+            "unit": "Bytes"
+          },
+          {
+            "name": "bytes_recv",
+            "rename": "NET_BYTES_RECV",
+            "unit": "Bytes"
+          },
+          {
+            "name": "packets_sent",
+            "rename": "NET_PACKETS_SENT",
+            "unit": "Count"
+          },
+          {
+            "name": "packets_recv",
+            "rename": "NET_PACKETS_RECV",
+            "unit": "Count"
+          },
+          {
+            "name": "err_in",
+            "rename": "NET_ERR_IN",
+            "unit": "Count"
+          },
+          {
+            "name": "err_out",
+            "rename": "NET_ERR_OUT",
+            "unit": "Count"
+          },
+          {
+            "name": "drop_in",
+            "rename": "NET_DROP_IN",
+            "unit": "Count"
+          },
+          {
+            "name": "drop_out",
+            "rename": "NET_DROP_OUT",
+            "unit": "Count"
+          }
+        ],
+        "metrics_collection_interval": 60,
+        "resources": [
+          "*"
+        ]
+      },
+      "swap": {
+        "measurement": [
+          {
+            "name": "used_percent",
+            "rename": "SWAP_USED_PERCENT",
+            "unit": "Percent"
+          },
+          {
+            "name": "free",
+            "rename": "SWAP_FREE",
+            "unit": "Bytes"
+          },
+          {
+            "name": "used",
+            "rename": "SWAP_USED",
             "unit": "Bytes"
           }
         ],
@@ -195,7 +460,7 @@ ${DISK_RESOURCES}
             "log_group_name": "/onprem/${SERVER_NAME}",
             "log_stream_name": "messages",
             "timezone": "Local"
-          }
+          }${CUSTOM_LOGS_JSON}
         ]
       }
     }
