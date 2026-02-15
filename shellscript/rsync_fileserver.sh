@@ -3,6 +3,16 @@
 # rsyncバックアップスクリプト
 # /mnt/fileserver/ → /mnt/fileserver-backup/ への定期バックアップ
 
+# 引数の解析
+DELETE_FLAG=""
+for arg in "$@"; do
+    case "${arg}" in
+        --delete)
+            DELETE_FLAG="--delete"
+            ;;
+    esac
+done
+
 # ログファイルパス（固定）
 LOG_FILE="/var/log/rsync/rsync_fileserver.log"
 LOCK_FILE="/var/run/rsync_fileserver.lock"
@@ -55,6 +65,9 @@ START_TIMESTAMP=$(date '+%Y-%m-%d %H:%M:%S')
     echo "[${START_TIMESTAMP}] rsync開始"
     echo "ソース: /mnt/fileserver/"
     echo "宛先: /mnt/fileserver-backup/"
+    if [ -n "${DELETE_FLAG}" ]; then
+        echo "オプション: --delete（宛先の不要ファイルを削除）"
+    fi
     echo "PID: $$"
     echo "========================================"
 } | tee -a ${LOG_FILE} > /dev/null
@@ -74,9 +87,9 @@ fi
 #   -h: 人間が読みやすい形式
 #   -v: 詳細表示
 #   --progress: 進捗表示
-#   --delete: 宛先にのみ存在するファイルを削除（完全同期）
+#   --delete: 宛先にのみ存在するファイルを削除（完全同期）※--delete引数指定時のみ
 #   --stats: 統計情報を表示
-rsync -ahv --progress --delete --stats \
+rsync -ahv --progress ${DELETE_FLAG} --stats \
     /mnt/fileserver/ \
     /mnt/fileserver-backup/ \
     >> ${LOG_FILE} 2>&1
