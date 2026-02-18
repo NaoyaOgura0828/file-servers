@@ -144,7 +144,7 @@ echo ""
 echo "設定内容:"
 echo "  サーバー名: ${SERVER_NAME}"
 echo "  リージョン: ${AWS_REGION}"
-echo "  メトリクス: CPU, メモリ, ディスク使用率, ディスク空き容量"
+echo "  メトリクス: CPU使用率, メモリ使用率, ディスク使用率, Swap使用率"
 if [ ${#ADDITIONAL_MOUNTPOINTS[@]} -gt 0 ]; then
     echo "  監視対象ディスク: / ${ADDITIONAL_MOUNTPOINTS[*]}"
 else
@@ -258,11 +258,6 @@ case ${yn} in
             "name": "cpu_usage_idle",
             "rename": "CPU_IDLE",
             "unit": "Percent"
-          },
-          {
-            "name": "cpu_usage_iowait",
-            "rename": "CPU_IOWAIT",
-            "unit": "Percent"
           }
         ],
         "metrics_collection_interval": 60,
@@ -274,31 +269,6 @@ case ${yn} in
             "name": "used_percent",
             "rename": "DISK_USED_PERCENT",
             "unit": "Percent"
-          },
-          {
-            "name": "free",
-            "rename": "DISK_FREE",
-            "unit": "Bytes"
-          },
-          {
-            "name": "used",
-            "rename": "DISK_USED",
-            "unit": "Bytes"
-          },
-          {
-            "name": "inodes_used",
-            "rename": "DISK_INODES_USED",
-            "unit": "Count"
-          },
-          {
-            "name": "inodes_free",
-            "rename": "DISK_INODES_FREE",
-            "unit": "Count"
-          },
-          {
-            "name": "inodes_total",
-            "rename": "DISK_INODES_TOTAL",
-            "unit": "Count"
           }
         ],
         "metrics_collection_interval": 60,
@@ -312,110 +282,9 @@ ${DISK_RESOURCES}
             "name": "mem_used_percent",
             "rename": "MEM_USED_PERCENT",
             "unit": "Percent"
-          },
-          {
-            "name": "mem_available",
-            "rename": "MEM_AVAILABLE",
-            "unit": "Bytes"
-          },
-          {
-            "name": "mem_used",
-            "rename": "MEM_USED",
-            "unit": "Bytes"
           }
         ],
         "metrics_collection_interval": 60
-      },
-      "diskio": {
-        "measurement": [
-          {
-            "name": "read_bytes",
-            "rename": "DISKIO_READ_BYTES",
-            "unit": "Bytes"
-          },
-          {
-            "name": "write_bytes",
-            "rename": "DISKIO_WRITE_BYTES",
-            "unit": "Bytes"
-          },
-          {
-            "name": "reads",
-            "rename": "DISKIO_READS",
-            "unit": "Count"
-          },
-          {
-            "name": "writes",
-            "rename": "DISKIO_WRITES",
-            "unit": "Count"
-          },
-          {
-            "name": "read_time",
-            "rename": "DISKIO_READ_TIME",
-            "unit": "Milliseconds"
-          },
-          {
-            "name": "write_time",
-            "rename": "DISKIO_WRITE_TIME",
-            "unit": "Milliseconds"
-          },
-          {
-            "name": "io_time",
-            "rename": "DISKIO_IO_TIME",
-            "unit": "Milliseconds"
-          }
-        ],
-        "metrics_collection_interval": 60,
-        "resources": [
-          "*"
-        ]
-      },
-      "net": {
-        "measurement": [
-          {
-            "name": "bytes_sent",
-            "rename": "NET_BYTES_SENT",
-            "unit": "Bytes"
-          },
-          {
-            "name": "bytes_recv",
-            "rename": "NET_BYTES_RECV",
-            "unit": "Bytes"
-          },
-          {
-            "name": "packets_sent",
-            "rename": "NET_PACKETS_SENT",
-            "unit": "Count"
-          },
-          {
-            "name": "packets_recv",
-            "rename": "NET_PACKETS_RECV",
-            "unit": "Count"
-          },
-          {
-            "name": "err_in",
-            "rename": "NET_ERR_IN",
-            "unit": "Count"
-          },
-          {
-            "name": "err_out",
-            "rename": "NET_ERR_OUT",
-            "unit": "Count"
-          },
-          {
-            "name": "drop_in",
-            "rename": "NET_DROP_IN",
-            "unit": "Count"
-          },
-          {
-            "name": "drop_out",
-            "rename": "NET_DROP_OUT",
-            "unit": "Count"
-          }
-        ],
-        "metrics_collection_interval": 60,
-        "resources": [
-          "*"
-        ]
       },
       "swap": {
         "measurement": [
@@ -423,16 +292,6 @@ ${DISK_RESOURCES}
             "name": "used_percent",
             "rename": "SWAP_USED_PERCENT",
             "unit": "Percent"
-          },
-          {
-            "name": "free",
-            "rename": "SWAP_FREE",
-            "unit": "Bytes"
-          },
-          {
-            "name": "used",
-            "rename": "SWAP_USED",
-            "unit": "Bytes"
           }
         ],
         "metrics_collection_interval": 60
@@ -652,7 +511,7 @@ EOF
     echo "確認事項:"
     echo "  1. AWS CloudWatchコンソールでメトリクスが表示されることを確認してください"
     echo "     - 名前空間: OnPremises/${SERVER_NAME}"
-    echo "     - メトリクス: CPU_IDLE, CPU_IOWAIT, DISK_USED_PERCENT, DISK_FREE, MEM_USED_PERCENT など"
+    echo "     - メトリクス: CPU_IDLE, MEM_USED_PERCENT, DISK_USED_PERCENT, SWAP_USED_PERCENT"
     echo ""
     echo "  2. CloudWatch Logsでログが収集されていることを確認してください"
     echo "     - ロググループ: /onprem/${SERVER_NAME}"

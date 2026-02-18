@@ -104,6 +104,6 @@ exec_change_set() {
 # 変更対象リソース
 #####################################
 # exec_change_set iam-role
-# exec_change_set cloudwatch-dashboard
+exec_change_set cloudwatch-dashboard
 
 exit 0
