@@ -6,11 +6,11 @@ export const prodConfig: EnvironmentConfig = {
   region: 'ap-northeast-1',
 
   fileServer: {
-    host: 'fileserver',
+    host: 'FileServer',
     namespace: 'OnPremises/FileServer',
   },
   backupServer: {
-    host: 'backupserver',
+    host: 'BackupServer',
     namespace: 'OnPremises/BackupServer',
   },
 };

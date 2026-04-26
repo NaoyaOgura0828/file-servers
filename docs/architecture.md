@@ -146,6 +146,7 @@ flowchart LR
 | USB ストレージ | boot 時に間に合わない可能性あり → fstab `nofail` + udev による late-mount で対応 ([ADR-005](decisions/ADR-005-udev-late-mount.md)) |
 | 単一 PV 障害 | FileServer USB プールは 29 PV 全揃いが mount 条件 (JBOD pool 特性) |
 | SMB ユーザー | 既存 admin (`NaoyaOgura`) を維持 — [ADR-003](decisions/ADR-003-naoyaogura-smb-user.md) |
+| ホスト/ワークグループ命名 | FileServer/BackupServer は Ubuntu 26.04 移行を機に PascalCase hostname + `WORKGROUP` で正規化 — [ADR-006](decisions/ADR-006-onprem-server-naming-normalization.md) |
 
 ## Related Documents
 

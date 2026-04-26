@@ -71,12 +71,12 @@ describe('CloudWatchDashboardStack', () => {
   it('should embed FileServer host metrics in dashboard body', () => {
     const dashboards = template.findResources('AWS::CloudWatch::Dashboard');
     const bodies = Object.values(dashboards).map((r) => r.Properties.DashboardBody as string);
-    expect(bodies.some((b) => b.includes('OnPremises/FileServer') && b.includes('"fileserver"'))).toBe(true);
+    expect(bodies.some((b) => b.includes('OnPremises/FileServer') && b.includes('"FileServer"'))).toBe(true);
   });
 
   it('should embed BackupServer host metrics in dashboard body', () => {
     const dashboards = template.findResources('AWS::CloudWatch::Dashboard');
     const bodies = Object.values(dashboards).map((r) => r.Properties.DashboardBody as string);
-    expect(bodies.some((b) => b.includes('OnPremises/BackupServer') && b.includes('"backupserver"'))).toBe(true);
+    expect(bodies.some((b) => b.includes('OnPremises/BackupServer') && b.includes('"BackupServer"'))).toBe(true);
   });
 });
