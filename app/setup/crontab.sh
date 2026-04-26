@@ -1,0 +1,275 @@
+#!/usr/bin/env bash
+#
+# Crontab セットアップスクリプト (Ubuntu 26.04 対応)
+#
+# app/config/crontab/<Server>.conf に定義された cron エントリを
+# /etc/cron.d/${CRON_FILENAME} として冪等に配置する。
+#
+# /etc/cron.d/ 方式を採用する理由:
+#   - ファイル配置で完結 (ユーザー crontab の編集不要、再実行で上書き = 冪等)
+#   - mtime 検知で cron が自動 reload (再起動不要)
+#   - --remove で 1 ファイル削除すれば完全クリーンアップ
+#   - logrotate.sh の /etc/logrotate.d/ 方式と同一パターンで認知負荷低減
+
+set -euo pipefail
+
+readonly SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
+readonly CRON_D_DIR="/etc/cron.d"
+
+# ----------------------------------------------------------------------------
+# Helpers
+# ----------------------------------------------------------------------------
+
+err() {
+    echo "エラー: $*" >&2
+    exit 1
+}
+
+warn() {
+    echo "警告: $*" >&2
+}
+
+show_help() {
+    cat <<EOF
+使用方法: $0 <crontab config> [--remove]
+
+app/config/crontab/<Server>.conf を読み込み、/etc/cron.d/<CRON_FILENAME> を冪等に配置する。
+
+引数:
+  <crontab config>       config ファイル (絶対パス / CWD 相対 / app/config/crontab/ 配下のパス)
+                         例: FileServer.conf
+
+オプション:
+  --remove               配置済の /etc/cron.d/<CRON_FILENAME> を削除する
+  -h, --help             このヘルプを表示
+
+参照する config 値:
+  CRON_FILENAME          /etc/cron.d/ 配下のファイル名 (英数字 + ハイフンのみ)
+  CRON_BODY              /etc/cron.d/<CRON_FILENAME> として書き込む本文
+
+注意:
+  - root 権限で実行: sudo $0 ...
+  - cron は /etc/cron.d/ の mtime 変化を検知して自動 reload するため、daemon 再起動は不要
+  - ファイル名にドット (.) を含むと cron が無視するため英数字+ハイフン推奨
+EOF
+}
+
+# ----------------------------------------------------------------------------
+# 引数パース
+# ----------------------------------------------------------------------------
+
+parse_args() {
+    if [[ $# -eq 0 ]]; then
+        echo "エラー: crontab config を指定してください。" >&2
+        echo "詳細は '$0 --help' を参照してください。" >&2
+        exit 1
+    fi
+
+    INPUT_CONFIG=""
+    REMOVE_MODE="no"
+
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            -h|--help) show_help; exit 0 ;;
+            --remove) REMOVE_MODE="yes"; shift ;;
+            *)
+                if [[ -z "${INPUT_CONFIG}" ]]; then
+                    INPUT_CONFIG="$1"
+                else
+                    err "複数の config が指定されています: $1"
+                fi
+                shift
+                ;;
+        esac
+    done
+    [[ -n "${INPUT_CONFIG}" ]] || err "crontab config を指定してください。"
+}
+
+require_root() {
+    [[ $(id -u) -eq 0 ]] || err "root 権限で実行してください: sudo $0 ..."
+}
+
+# ----------------------------------------------------------------------------
+# 設定ファイルロード
+# ----------------------------------------------------------------------------
+
+load_config() {
+    if [[ ! -f "${INPUT_CONFIG}" ]]; then
+        local candidates=(
+            "${SCRIPT_DIR}/${INPUT_CONFIG}"
+            "${SCRIPT_DIR}/../config/crontab/${INPUT_CONFIG}"
+        )
+        local resolved=""
+        for c in "${candidates[@]}"; do
+            if [[ -f "${c}" ]]; then
+                resolved=$(cd "$(dirname "${c}")" && pwd)/$(basename "${c}")
+                break
+            fi
+        done
+        [[ -n "${resolved}" ]] || err "config が見つかりません: ${INPUT_CONFIG}"
+        INPUT_CONFIG="${resolved}"
+    fi
+
+    echo "config: ${INPUT_CONFIG}"
+    # shellcheck disable=SC1090
+    source "${INPUT_CONFIG}"
+
+    [[ -n "${CRON_FILENAME:-}" ]] || err "config に CRON_FILENAME が定義されていません。"
+    [[ -n "${CRON_BODY:-}" ]] || err "config に CRON_BODY が定義されていません。"
+
+    # cron は ドット / アンダースコア / 大文字を含むファイルを無視/警告する。英数字+ハイフンに限定
+    if [[ ! "${CRON_FILENAME}" =~ ^[a-z0-9-]+$ ]]; then
+        err "CRON_FILENAME は小文字英数字とハイフンのみ使用可: ${CRON_FILENAME}"
+    fi
+
+    DEST_PATH="${CRON_D_DIR}/${CRON_FILENAME}"
+}
+
+# ----------------------------------------------------------------------------
+# プラン
+# ----------------------------------------------------------------------------
+
+print_plan() {
+    local sep="------------------------------------------------------------------------------------------------------------------------------------------------------"
+    echo "${sep}"
+    if [[ "${REMOVE_MODE}" == "yes" ]]; then
+        echo "Crontab エントリの **削除** を実行します。"
+    else
+        echo "Crontab エントリの配置を実行します。"
+    fi
+    echo ""
+    echo "  CRON_FILENAME:    ${CRON_FILENAME}"
+    echo "  配置先:           ${DEST_PATH}"
+    if [[ -f "${DEST_PATH}" ]]; then
+        echo "  既存ファイル:     存在 (上書きされます)"
+    else
+        echo "  既存ファイル:     未配置"
+    fi
+    if [[ "${REMOVE_MODE}" != "yes" ]]; then
+        echo ""
+        echo "  --- CRON_BODY (配置内容) ---"
+        printf '%s\n' "${CRON_BODY}" | sed 's/^/    /'
+        echo "  --- /CRON_BODY ---"
+    fi
+    echo "${sep}"
+}
+
+confirm_or_abort() {
+    local yn
+    read -r -p "この設定で実行してよろしいですか？ (Y/n) " yn
+    case "${yn}" in
+        [yY]) return 0 ;;
+        *) echo "中止しました。"; exit 0 ;;
+    esac
+}
+
+# ----------------------------------------------------------------------------
+# 配置 (install)
+# ----------------------------------------------------------------------------
+
+write_cron_file() {
+    echo "Step 1: ${DEST_PATH} を配置 (パーミッション 644 / root:root)"
+    local tmp
+    tmp=$(mktemp)
+    {
+        echo "# Generated by app/setup/crontab.sh from $(basename "${INPUT_CONFIG}")"
+        printf '%s\n' "${CRON_BODY}"
+    } > "${tmp}"
+    install -m 644 -o root -g root "${tmp}" "${DEST_PATH}"
+    rm -f "${tmp}"
+    echo "  完了。"
+}
+
+verify_cron_d_file() {
+    echo "Step 2: 配置内容を確認"
+    # cron デーモンは /etc/cron.d/ の mtime 変化を検知して自動 reload するため reload コマンド不要
+    # 配置内容の読み戻しのみ実施 (構文チェッカは run-parts 等が間接的に行う)
+    if [[ -s "${DEST_PATH}" ]]; then
+        echo "  ファイルサイズ: $(stat -c %s "${DEST_PATH}") bytes"
+    else
+        warn "${DEST_PATH} が空です。"
+    fi
+}
+
+# ----------------------------------------------------------------------------
+# 削除 (uninstall)
+# ----------------------------------------------------------------------------
+
+remove_cron_file() {
+    echo "Step 1: ${DEST_PATH} を削除"
+    if [[ -f "${DEST_PATH}" ]]; then
+        rm -f "${DEST_PATH}"
+        echo "  削除しました。"
+    else
+        warn "対象ファイルが存在しません: ${DEST_PATH}"
+    fi
+}
+
+# ----------------------------------------------------------------------------
+# サマリ
+# ----------------------------------------------------------------------------
+
+print_summary_install() {
+    local sep="------------------------------------------------------------------------------------------------------------------------------------------------------"
+    cat <<EOF
+
+${sep}
+Crontab エントリの配置が完了しました。
+${sep}
+
+設定:
+  ファイル:         ${DEST_PATH}
+  パーミッション:   $(stat -c '%a (%A)' "${DEST_PATH}")
+  所有者:           $(stat -c '%U:%G' "${DEST_PATH}")
+
+確認コマンド:
+  内容確認:        sudo cat ${DEST_PATH}
+  cron ログ:       sudo journalctl -u cron --since "1 hour ago"  # Debian/Ubuntu
+                   sudo journalctl -u crond --since "1 hour ago" # RHEL/Rocky
+  次回実行予定:    systemd-analyze calendar '<次の cron 表現>'
+
+注意:
+  - cron は /etc/cron.d/ の mtime 変化を検知して自動 reload (daemon 再起動不要)
+  - 既にユーザー crontab に同等エントリがある場合は重複実行される。crontab -e で削除推奨
+${sep}
+EOF
+}
+
+print_summary_remove() {
+    local sep="------------------------------------------------------------------------------------------------------------------------------------------------------"
+    cat <<EOF
+
+${sep}
+Crontab エントリを削除しました。
+${sep}
+
+  ${DEST_PATH}
+
+確認:
+  ls -la ${CRON_D_DIR}/ | grep ${CRON_FILENAME} || echo "  (削除済)"
+${sep}
+EOF
+}
+
+# ----------------------------------------------------------------------------
+# main
+# ----------------------------------------------------------------------------
+
+main() {
+    parse_args "$@"
+    require_root
+    load_config
+    print_plan
+    confirm_or_abort
+
+    if [[ "${REMOVE_MODE}" == "yes" ]]; then
+        remove_cron_file
+        print_summary_remove
+    else
+        write_cron_file
+        verify_cron_d_file
+        print_summary_install
+    fi
+}
+
+main "$@"

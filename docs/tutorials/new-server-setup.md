@@ -150,11 +150,7 @@ sudo app/setup/samba.sh BackupServer.conf
 
 ```bash
 sudo app/setup/logrotate.sh                     # rsync ログのローテーション設定
-
-# crontab 登録 (admin 権限で)
-sudo crontab -e
-# 以下を追記 (毎時 0 分に実行する例)
-# 0 * * * * /home/NaoyaOgura/file-servers/app/jobs/rsync_fileserver.sh
+sudo app/setup/crontab.sh FileServer.conf       # /etc/cron.d/fileserver を配置 (毎時 0 分に rsync 実行)
 
 # 動作確認 (手動実行)
 sudo app/jobs/rsync_fileserver.sh

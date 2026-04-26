@@ -38,14 +38,13 @@ swapon --show                                # Swap
 
 ## 定期ジョブ (FileServer)
 
-`app/jobs/rsync_fileserver.sh` を cron で定期実行する想定。
+`app/jobs/rsync_fileserver.sh` を `app/setup/crontab.sh` 経由で `/etc/cron.d/fileserver` に登録する。
 
 ```bash
-# 毎時 0 分に実行する例
-0 * * * * sudo /home/NaoyaOgura/file-servers/app/jobs/rsync_fileserver.sh
+sudo app/setup/crontab.sh FileServer.conf       # 毎時 0 分に rsync 実行 (config: app/config/crontab/FileServer.conf)
 ```
 
-`--checksum` 比較のため、データセット規模次第で 1 回あたりの所要時間が長くなる点に注意。実行履歴は `/var/log/rsync/rsync_fileserver.log` に残り、CloudWatch Logs `/onprem/FileServer` の `rsync` ストリームに転送される。
+設定内容は `app/config/crontab/FileServer.conf` を参照。`--checksum` 比較のため、データセット規模次第で 1 回あたりの所要時間が長くなる点に注意。実行履歴は `/var/log/rsync/rsync_fileserver.log` に残り、CloudWatch Logs `/onprem/FileServer` の `rsync` ストリームに転送される。
 
 ## Backup Drive 管理 (BackupServer)
 
