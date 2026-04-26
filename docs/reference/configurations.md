@@ -12,6 +12,9 @@ app/config/
 │   ├── BackupServer.conf
 │   ├── FileServer.conf
 │   └── sample.conf
+├── crontab/
+│   ├── FileServer.conf
+│   └── sample.conf
 ├── logrotate/
 │   └── rsync_fileserver.conf           # logrotate 形式そのもの
 ├── network/
@@ -19,9 +22,11 @@ app/config/
 │   └── sample.conf
 ├── os_init/
 │   ├── BackupServer.conf
+│   ├── FileServer.conf
 │   └── sample.conf
 ├── samba/
 │   ├── BackupServer.conf
+│   ├── FileServer.conf
 │   └── sample.conf
 └── storage/
     ├── BackupServer/
@@ -60,6 +65,25 @@ LOG_PATHS=""                             # 追加で監視するログ。形式:
 | `SERVER_NAME` | string | ✓ | — |
 | `MOUNTPOINTS` | space-sep string | — | "" |
 | `LOG_PATHS` | space-sep string ("path:stream") | — | "" |
+
+### `crontab/<server>.conf`
+
+```bash
+CRON_FILENAME="fileserver"               # /etc/cron.d/<CRON_FILENAME> として配置
+CRON_BODY='
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin
+
+0 * * * * root /home/NaoyaOgura/file-servers/app/jobs/rsync_fileserver.sh
+'
+```
+
+| 変数 | 必須 | 補足 |
+|---|---|---|
+| `CRON_FILENAME` | ✓ | 小文字英数字とハイフンのみ (cron はドット入りファイルを無視) |
+| `CRON_BODY` | ✓ | システム crontab 形式 (`分 時 日 月 曜日 ユーザー コマンド`) |
+
+`crontab.sh` が `/etc/cron.d/<CRON_FILENAME>` に install -m 644 root:root で配置。cron は mtime 検知で自動 reload (daemon 再起動不要)。
 
 ### `logrotate/rsync_fileserver.conf`
 

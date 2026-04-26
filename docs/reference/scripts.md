@@ -20,6 +20,7 @@
 | `cloudwatch_agent.sh` | root | `<config>` | CloudWatch Agent 導入 + 設定 + 起動 |
 | `samba.sh` | root | `<config>` | Samba (smbd/nmbd + Avahi) + Time Machine 設定 |
 | `logrotate.sh` | root | (なし) | rsync ログ用 logrotate 設定の配置 |
+| `crontab.sh` | root | `<config> [--remove]` | `/etc/cron.d/<name>` を冪等配置 (定期ジョブ登録) |
 | `docker.sh` | user | `[--codename <name>] [--skip-group]` | Docker CE + plugins 導入 |
 | `claude.sh` | user | `[--config-repo URL] [--skip-config]` | Claude Code 導入 + ~/.claude/ クローン |
 | `activation.sh` | user (管理ホスト) | `<server name>` | SSM ハイブリッドアクティベーション発行 + 登録手順 MD 出力 |
@@ -77,6 +78,13 @@
 #### `logrotate.sh`
 - 入力 config: `app/config/logrotate/rsync_fileserver.conf` (logrotate 形式そのもの)
 - ステップ: logrotate 導入確認 → `install -m 644 -o root -g root /etc/logrotate.d/rsync_fileserver` → `logrotate -d` 構文検証 → ログディレクトリ確保
+
+#### `crontab.sh`
+- 入力 config: `app/config/crontab/<server>.conf` (`CRON_FILENAME`, `CRON_BODY`)
+- 引数: `<config>` / `--remove`
+- ステップ: ファイル名バリデーション (英数字+ハイフン) → `install -m 644 -o root -g root /etc/cron.d/<CRON_FILENAME>` → サイズ確認
+- 配置方式は `logrotate.sh` と同一パターン (mtime 検知で cron が自動 reload、daemon 再起動不要)
+- `--remove` で `/etc/cron.d/<CRON_FILENAME>` を削除して完全クリーンアップ
 
 #### `docker.sh`
 - 引数: `--codename <name>` (省略時は `/etc/os-release` から自動検出) / `--skip-group`

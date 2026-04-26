@@ -32,7 +32,7 @@ flowchart TB
     I --> J[Samba<br>samba.sh]
     J --> K{用途による}
     K -->|FileServer| L[logrotate.sh]
-    L --> M[cron 登録]
+    L --> M[crontab.sh]
     K -->|BackupServer| N[完了]
 ```
 
