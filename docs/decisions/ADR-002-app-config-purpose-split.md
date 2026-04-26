@@ -32,7 +32,7 @@ app/config/
 ファイル命名は purpose ごとに最適化:
 - per-server (CWAgent / Samba / Network / OS init): `<ServerName>.conf` (PascalCase)
 - per-target (logrotate): 対象ログ名 (`rsync_fileserver.conf`)
-- 複数ボリュームを持つサーバーの storage は更にネスト: `storage/<Server>/<role>.conf` (例: `FileServer/sata.conf`, `FileServer/usb.conf`)
+- 複数ボリュームを持つサーバーの storage は更にネスト: `storage/<Server>/<role>.conf` (例: `FileServer/fileserver.conf`, `FileServer/fileserver-backup.conf`)
 - `aws_cli/config` のみ AWS CLI ini 形式そのものを保持
 
 各 setup スクリプトのパス解決ロジックは:
@@ -40,7 +40,7 @@ app/config/
 2. スクリプト同居ディレクトリ (`${SCRIPT_DIR}/...`)
 3. `app/config/<purpose>/` 配下 (`${SCRIPT_DIR}/../config/<purpose>/...`)
 
-の優先順位で resolve する。これにより `BackupServer.conf` のようなファイル名 1 個でも `FileServer/sata.conf` のようなネスト指定でも解決できる。
+の優先順位で resolve する。これにより `BackupServer.conf` のようなファイル名 1 個でも `FileServer/fileserver.conf` のようなネスト指定でも解決できる。
 
 ## Alternatives Considered
 
@@ -62,7 +62,7 @@ app/config/
 
 ### 欠点
 
-- ディレクトリ階層が深くなる (`app/config/storage/FileServer/sata.conf` で 4 階層)
+- ディレクトリ階層が深くなる (`app/config/storage/FileServer/fileserver.conf` で 4 階層)
 - サーバー単位の全体像を見るのに複数ディレクトリを横断する
 
 ### 影響範囲

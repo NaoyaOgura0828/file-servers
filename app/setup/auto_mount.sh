@@ -6,7 +6,7 @@
 # udev rule + oneshot systemd service を冪等に配置する。
 #
 # 用途:
-#   - 起動後に USB-HDD を接続するワークフロー (FileServer の 15 PV プール等)
+#   - 起動後に USB-HDD を接続するワークフロー (FileServer の 29 PV プール等)
 #   - storage.sh の fstab automount (boot 時) を補完して late-mount を実現
 #
 # 仕組み:
@@ -43,7 +43,7 @@ storage.sh で fstab に登録した late-mount ボリュームに対し、起�
 引数:
   <storage config>       app/setup/storage.sh と同じ形式の config ファイル
                          (絶対パス / CWD 相対 / app/config/storage/ 配下のパス)
-                         例: BackupServer/timemachine.conf, FileServer/usb.conf
+                         例: BackupServer/timemachine.conf, FileServer/fileserver-backup.conf
 
 オプション:
   --remove               作成済の udev rule + systemd service を削除する
@@ -64,8 +64,8 @@ storage.sh で fstab に登録した late-mount ボリュームに対し、起�
 
 例:
   sudo $0 BackupServer/timemachine.conf
-  sudo $0 FileServer/usb.conf
-  sudo $0 FileServer/usb.conf --remove
+  sudo $0 FileServer/fileserver-backup.conf
+  sudo $0 FileServer/fileserver-backup.conf --remove
 EOF
 }
 
@@ -133,9 +133,9 @@ load_config() {
         [[ -n "${!v:-}" ]] || err "config に ${v} が定義されていません。"
     done
 
-    # プレースホルダ検出 (FileServer 系の <usb-vg-name> 等)
+    # プレースホルダ検出 (sample.conf 由来の <vg-name> 等)
     if [[ "${VG_NAME}${LV_NAME}${MOUNT_POINT}" == *"<"* ]]; then
-        err "プレースホルダ <...> が含まれています。実 FileServer 上で実値に置換してから実行してください。"
+        err "プレースホルダ <...> が含まれています。実機上で実値に置換してから実行してください。"
     fi
 }
 

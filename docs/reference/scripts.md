@@ -119,7 +119,7 @@ sudo /home/NaoyaOgura/file-servers/app/jobs/rsync_fileserver.sh --delete   # 完
 2. `${SCRIPT_DIR}/${INPUT}` (スクリプト同居 dir)
 3. `${SCRIPT_DIR}/../config/<purpose>/${INPUT}` (`app/config/<purpose>/` 配下)
 
-これにより `BackupServer.conf` のようなファイル名 1 個だけでも、`FileServer/sata.conf` のようなネスト指定でも解決できる。
+これにより `BackupServer.conf` のようなファイル名 1 個だけでも、`FileServer/fileserver.conf` のようなネスト指定でも解決できる。
 
 ## 関連
 

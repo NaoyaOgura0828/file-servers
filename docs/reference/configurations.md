@@ -27,8 +27,8 @@ app/config/
     ├── BackupServer/
     │   └── timemachine.conf
     ├── FileServer/
-    │   ├── sata.conf
-    │   └── usb.conf
+    │   ├── fileserver.conf
+    │   └── fileserver-backup.conf
     └── sample.conf
 ```
 
@@ -126,7 +126,7 @@ MOUNT_OPTIONS="defaults,noatime,nofail,x-systemd.device-timeout=30s"
 | 内蔵 SATA (常に存在) | `defaults,noatime` |
 | 着脱可能 SATA / 内蔵プール | `defaults,noatime,nofail` |
 | USB 単一台 (BackupServer) | `defaults,noatime,nofail,x-systemd.device-timeout=30s` |
-| USB プール 15 PV (FileServer) | `defaults,noatime,nofail,x-systemd.device-timeout=120s` |
+| USB プール 29 PV (FileServer) | `defaults,noatime,nofail,x-systemd.device-timeout=120s` |
 
 ## ネスト構造のサポート
 
@@ -135,8 +135,8 @@ config パスはネストディレクトリも扱える (`storage/` を例に):
 ```bash
 sudo app/setup/storage.sh BackupServer.conf                 # 1 階層 (廃止予定)
 sudo app/setup/storage.sh BackupServer/timemachine.conf     # 2 階層 (現行)
-sudo app/setup/storage.sh FileServer/sata.conf
-sudo app/setup/storage.sh FileServer/usb.conf
+sudo app/setup/storage.sh FileServer/fileserver.conf
+sudo app/setup/storage.sh FileServer/fileserver-backup.conf
 ```
 
 [scripts.md > Path 解決ルール](scripts.md#path-解決ルール) 参照。

@@ -7,7 +7,7 @@ Accepted
 ## Context
 
 - BackupServer の `/mnt/timemachine` は外付け USB-HDD (1 台)
-- FileServer の USB プールは USB-HDD × 15 を 1 VG にまとめている
+- FileServer の USB プールは USB-HDD × 29 を 1 VG にまとめている
 - Boot 時に USB が間に合わず、fstab automount が失敗するケースが過去発生
 - 旧運用では起動後に `mount_drive.sh` を **手動実行**して回避していた
 - Ubuntu 26.04 移行を機に「全 USB が接続された時点で自動マウント」を実現したい
@@ -24,7 +24,7 @@ UUID=...  /mnt/<usb-pool>   xfs  defaults,noatime,nofail,x-systemd.device-timeou
 ```
 
 - `nofail`: デバイス未検出時に boot を失敗させずスキップ (emergency mode 回避)
-- `x-systemd.device-timeout`: デバイス待ち時間。USB hub の power-on cascade と LVM activation を考慮して BackupServer は 30s、FileServer USB プールは 120s
+- `x-systemd.device-timeout`: デバイス待ち時間。USB hub の power-on cascade と LVM activation を考慮して BackupServer は 30s、FileServer USB プールは 120s (※当初 USB-HDD 15 台想定で決定。現行 29 台でも稼働実績あり。台数増加時は boot 時間を再測定して見直すこと)
 
 ### 2. udev rule + oneshot systemd service による late-mount
 

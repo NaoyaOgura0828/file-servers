@@ -7,7 +7,7 @@
 | 対象 | 主要構成 |
 |---|---|
 | BackupServer | `/mnt/timemachine` (USB×1, xfs)、Samba (Time Machine 共有)、CloudWatch Agent |
-| FileServer | `/mnt/<sata-mount>` (SATA×13, xfs) と `/mnt/<usb-mount>` (USB×15, xfs)、Samba、rsync ローカルバックアップ |
+| FileServer | `/mnt/fileserver` (SATA×14, xfs) と `/mnt/fileserver-backup` (USB×29, xfs)、Samba、rsync ローカルバックアップ |
 
 ## 日常確認
 
@@ -56,15 +56,15 @@ BackupServer の `/mnt/timemachine` は USB 接続 1 台。物理着脱時の手
 3. USB を物理交換
 4. 再接続後は **udev + systemd の auto_mount.sh** が `/mnt/timemachine` を自動再マウント (詳細は [how-to/mount-recovery.md](how-to/mount-recovery.md))
 
-## FileServer USB プール (15 PV) の起動シナリオ
+## FileServer USB プール (29 PV) の起動シナリオ
 
 > [!IMPORTANT]
 > USB プールはどれか 1 PV でも欠ければ VG が partial 状態となり、LV をマウントできない。
 
 | シナリオ | 挙動 |
 |---|---|
-| boot 時に 15 USB すべて接続済 | fstab で自動マウント |
-| boot 時に USB 未接続、起動後に全 15 を接続 | LVM event_activation → udev rule → `auto_mount.sh` の service が `/mnt/<usb>` をマウント |
+| boot 時に 29 USB すべて接続済 | fstab で自動マウント |
+| boot 時に USB 未接続、起動後に全 29 を接続 | LVM event_activation → udev rule → `auto_mount.sh` の service が `/mnt/fileserver-backup` をマウント |
 | 起動後の接続で一部が欠けたまま | VG が partial 状態。`pvs` / `vgs` で欠落 PV を特定 → 物理確認 |
 
 ## ログ確認

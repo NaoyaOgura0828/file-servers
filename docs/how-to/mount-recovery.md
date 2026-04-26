@@ -160,7 +160,7 @@ sudo systemctl daemon-reload
 > `pvcreate` / `vgcreate` / `lvcreate` 系の操作は破壊的。本ガイドでは検出 + 既存マウントの復旧のみ扱う。新規作成は [tutorials/new-server-setup.md](../tutorials/new-server-setup.md) を参照。
 
 > [!IMPORTANT]
-> FileServer USB プール (15 PV) は **すべての PV 揃い**が LV マウント条件。1 台欠けたら VG が partial になり、LV はマウント不可。物理確認が最優先。
+> FileServer USB プール (29 PV) は **すべての PV 揃い**が LV マウント条件。1 台欠けたら VG が partial になり、LV はマウント不可。物理確認が最優先。
 
 ## 関連
 

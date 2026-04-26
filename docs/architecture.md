@@ -144,7 +144,7 @@ flowchart LR
 | FileSystem | プロジェクト標準は **xfs** (Ubuntu 上でも) — [ADR-004](decisions/ADR-004-xfs-as-default-fs.md) |
 | LVM | VG/LV の新規作成は `lvm_create.sh` で手動。`storage.sh` は検出・マウント専用 |
 | USB ストレージ | boot 時に間に合わない可能性あり → fstab `nofail` + udev による late-mount で対応 ([ADR-005](decisions/ADR-005-udev-late-mount.md)) |
-| 単一 PV 障害 | FileServer USB プールは 15 PV 全揃いが mount 条件 (JBOD pool 特性) |
+| 単一 PV 障害 | FileServer USB プールは 29 PV 全揃いが mount 条件 (JBOD pool 特性) |
 | SMB ユーザー | 既存 admin (`NaoyaOgura`) を維持 — [ADR-003](decisions/ADR-003-naoyaogura-smb-user.md) |
 
 ## Related Documents
