@@ -42,8 +42,8 @@ show_help() {
   VG_NAME / LV_NAME / MOUNT_POINT / FILESYSTEM / MOUNT_OPTIONS
 
 備考:
-  - PV/VG/LV の新規作成・フォーマットは行わない (sample.conf 末尾の手順を参照)
-  - 新規ディスクの場合は事前に pvcreate/vgcreate/lvcreate/mkfs.xfs を手動実行すること
+  - PV/VG/LV の新規作成・フォーマットは行わない (本スクリプトは検出・マウント専用)
+  - 新規ディスクの場合は app/setup/lvm_create.sh で作成し、その後本スクリプトでマウントする
     (本プロジェクトの標準ファイルシステムは xfs)
 EOF
 }
