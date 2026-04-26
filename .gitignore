@@ -1,3 +1,6 @@
 # SSM Activation関連ファイル（機密情報を含むため除外）
 activation-*.json
 How_to_Activation_for_*.md
+
+# activation.sh の出力先 (Activation Code 等の機密情報を含む)
+app/setup/output/

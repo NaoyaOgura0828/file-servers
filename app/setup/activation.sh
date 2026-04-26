@@ -11,6 +11,7 @@
 set -euo pipefail
 
 readonly SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
+readonly OUTPUT_DIR="${SCRIPT_DIR}/output"
 readonly AWS_PROFILE_NAME="FileServers"
 readonly AWS_REGION="ap-northeast-1"
 readonly IAM_ROLE_NAME="SSMCloudWatchAgentRole"
@@ -34,8 +35,9 @@ show_help() {
 使用方法: $0 <サーバー名>
 
 SSM ハイブリッドアクティベーションを作成し、Activation ID/Code および登録手順を出力します。
-出力先: ${SCRIPT_DIR}/activation-<サーバー名>-<タイムスタンプ>.json
-        ${SCRIPT_DIR}/How_to_Activation_for_<サーバー名>.md
+出力先: ${OUTPUT_DIR}/activation-<サーバー名>-<タイムスタンプ>.json
+        ${OUTPUT_DIR}/How_to_Activation_for_<サーバー名>.md
+(出力ディレクトリは git 管理外。.gitignore で除外済み)
 
 引数:
   <サーバー名>           例: FileServer / BackupServer
@@ -171,10 +173,12 @@ create_activation() {
         err "ActivationId / ActivationCode の取得に失敗しました。"
     fi
 
+    install -d -m 700 "${OUTPUT_DIR}"
+
     local timestamp
     timestamp=$(date +%Y%m%d-%H%M%S)
-    OUTPUT_JSON_PATH="${SCRIPT_DIR}/activation-${SERVER_NAME}-${timestamp}.json"
-    OUTPUT_DOC_PATH="${SCRIPT_DIR}/How_to_Activation_for_${SERVER_NAME}.md"
+    OUTPUT_JSON_PATH="${OUTPUT_DIR}/activation-${SERVER_NAME}-${timestamp}.json"
+    OUTPUT_DOC_PATH="${OUTPUT_DIR}/How_to_Activation_for_${SERVER_NAME}.md"
 
     echo "${result}" | jq '.' > "${OUTPUT_JSON_PATH}"
     chmod 600 "${OUTPUT_JSON_PATH}"
