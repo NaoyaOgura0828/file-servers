@@ -1,0 +1,42 @@
+[default]
+region = us-west-2
+output = json
+
+[sso-session SSO]
+sso_start_url = https://d-9567aa1585.awsapps.com/start/#
+sso_region = ap-northeast-1
+sso_registration_scopes = sso:account:access
+
+[profile Management]
+sso_session = SSO
+sso_account_id = 597299534728
+sso_role_name = AdministratorAccess
+region = ap-northeast-1
+output = json
+
+[profile Claude]
+sso_session = SSO
+sso_account_id = 891376986027
+sso_role_name = AdministratorAccess
+region = us-west-2
+output = json
+
+[profile FileServers]
+sso_session = SSO
+sso_account_id = 856221042201
+sso_role_name = AdministratorAccess
+region = ap-northeast-1
+output = json
+
+[profile AutoStockTradeDev]
+sso_session = SSO
+sso_account_id = 648671223519
+sso_role_name = AdministratorAccess
+output = json
+
+[profile Sandbox]
+sso_session = SSO
+sso_account_id = 891376986027
+sso_role_name = AdministratorAccess
+region = ap-northeast-1
+output = json
