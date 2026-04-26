@@ -105,18 +105,22 @@
 
 | スクリプト | 実行権限 | 主な引数 | 役割 |
 |---|---|---|---|
-| `rsync_fileserver.sh` | root | `[--delete]` | `/mnt/fileserver/` → `/mnt/fileserver-backup/` の rsync 同期 |
+| `rsync_fileserver.sh` | root | `[--delete] [--checksum] [--dry-run]` | `/mnt/fileserver/` → `/mnt/fileserver-backup/` の rsync 同期 |
 
 ### `rsync_fileserver.sh`
 
-- 比較モード: 常時 `--checksum` (内容ハッシュ、サイレント破損検出)
+- 比較モード: 既定は mtime + size による高速比較 (`-aHAXh --numeric-ids --stats`)
 - 多重起動防止: `flock(1)` (`/var/run/rsync_fileserver.lock`)
 - ログ: `/var/log/rsync/rsync_fileserver.log` (CloudWatch Agent 経由で `/onprem/FileServer/rsync` ストリームへ)
-- オプション: `--delete` で宛先側余剰ファイルを削除し完全ミラー化
+- オプション:
+  - `--delete`: 宛先側の余剰ファイルを削除し完全ミラー化
+  - `--checksum`: 内容ハッシュで差分判定 (サイレント破損検出)。**定期実行禁止** ([ADR-007](../decisions/ADR-007-rsync-no-periodic-checksum.md))。100TB 規模ではソース・宛先双方を全件読むため I/O が極めて重い。破損疑い時の手動スポット検査専用
+  - `--dry-run`: 実転送せず差分のみ報告 (`--checksum` と併用して検証用途)
 
 ```bash
-sudo /home/NaoyaOgura/file-servers/app/jobs/rsync_fileserver.sh
-sudo /home/NaoyaOgura/file-servers/app/jobs/rsync_fileserver.sh --delete   # 完全ミラー
+sudo /home/NaoyaOgura/file-servers/app/jobs/rsync_fileserver.sh                           # 通常 (毎時 cron と同じ)
+sudo /home/NaoyaOgura/file-servers/app/jobs/rsync_fileserver.sh --delete                  # 完全ミラー
+sudo /home/NaoyaOgura/file-servers/app/jobs/rsync_fileserver.sh --checksum --dry-run      # 破損検査 (手動)
 ```
 
 ## Path 解決ルール

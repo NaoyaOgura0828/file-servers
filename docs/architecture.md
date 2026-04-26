@@ -107,11 +107,16 @@ flowchart TB
 3. `vfs_fruit` で macOS 互換に変換され `/mnt/timemachine` に書き込み
 
 ### FileServer ローカルバックアップ
-1. cron が `app/jobs/rsync_fileserver.sh` を起動
+1. cron が毎時 0 分に `app/jobs/rsync_fileserver.sh` を起動
 2. `flock` で多重起動を排他
-3. `rsync -ahcv --checksum --stats /mnt/fileserver/ /mnt/fileserver-backup/`
+3. `rsync -aHAXh --numeric-ids --stats /mnt/fileserver/ /mnt/fileserver-backup/` (mtime + size 比較で高速同期)
 4. ログを `/var/log/rsync/rsync_fileserver.log` に追記
 5. CloudWatch Agent がログを `rsync` ストリームに転送
+
+> [!NOTE]
+> `--checksum` (内容ハッシュ比較) は 100TB 規模で I/O 過大なため定期実行しない。
+> 破損が疑われた場合のみ手動でスポット検査として `sudo .../rsync_fileserver.sh --checksum --dry-run` を実行する。
+> 詳細: [ADR-007](decisions/ADR-007-rsync-no-periodic-checksum.md)
 
 ## External Dependencies
 
@@ -147,6 +152,7 @@ flowchart LR
 | 単一 PV 障害 | FileServer USB プールは 29 PV 全揃いが mount 条件 (JBOD pool 特性) |
 | SMB ユーザー | 既存 admin (`NaoyaOgura`) を維持 — [ADR-003](decisions/ADR-003-naoyaogura-smb-user.md) |
 | ホスト/ワークグループ命名 | FileServer/BackupServer は Ubuntu 26.04 移行を機に PascalCase hostname + `WORKGROUP` で正規化 — [ADR-006](decisions/ADR-006-onprem-server-naming-normalization.md) |
+| rsync `--checksum` | 100TB 規模で I/O 過大なため定期実行しない。手動スポット検査専用 — [ADR-007](decisions/ADR-007-rsync-no-periodic-checksum.md) |
 
 ## Related Documents
 

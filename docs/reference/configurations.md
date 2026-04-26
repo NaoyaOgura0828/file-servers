@@ -85,6 +85,9 @@ PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin
 
 `crontab.sh` が `/etc/cron.d/<CRON_FILENAME>` に install -m 644 root:root で配置。cron は mtime 検知で自動 reload (daemon 再起動不要)。
 
+> [!NOTE]
+> FileServer の cron は **rsync の通常実行のみ**を登録する。`--checksum` 付きの定期ジョブは登録しない (100TB 規模で I/O 過大、[ADR-007](../decisions/ADR-007-rsync-no-periodic-checksum.md))。
+
 ### `logrotate/rsync_fileserver.conf`
 
 logrotate 設定そのもの。`logrotate.sh` が `/etc/logrotate.d/rsync_fileserver` に install -m 644 で配置。
@@ -179,3 +182,4 @@ sudo app/setup/storage.sh FileServer/fileserver-backup.conf
 - [スクリプトリファレンス](scripts.md)
 - [メトリクスリファレンス](metrics.md)
 - [ADR-002: config を目的別ディレクトリに分割](../decisions/ADR-002-app-config-purpose-split.md)
+- [ADR-007: rsync `--checksum` を定期実行しない](../decisions/ADR-007-rsync-no-periodic-checksum.md)

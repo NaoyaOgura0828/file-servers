@@ -22,7 +22,7 @@ flowchart LR
 - **Ubuntu 26.04 セットアップ自動化** — OS 初期化 / LVM / Samba / SSM Agent / CloudWatch Agent / Docker / AWS CLI / Claude Code を冪等な setup スクリプトで導入
 - **AWS インフラ (CDK)** — IAM Role と CloudWatch Dashboard を TypeScript で管理
 - **USB ストレージ late-mount** — boot 時に USB が間に合わなくても、後接続で自動マウント (udev + systemd)
-- **rsync バックアップジョブ** — `--checksum` で内容ハッシュ比較、flock で多重起動防止
+- **rsync バックアップジョブ** — 毎時 mtime + size 比較で高速同期、flock で多重起動防止 (`--checksum` は手動スポット検査用)
 
 ## Quick Start
 

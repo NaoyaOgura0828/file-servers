@@ -44,7 +44,17 @@ swapon --show                                # Swap
 sudo app/setup/crontab.sh FileServer.conf       # 毎時 0 分に rsync 実行 (config: app/config/crontab/FileServer.conf)
 ```
 
-設定内容は `app/config/crontab/FileServer.conf` を参照。`--checksum` 比較のため、データセット規模次第で 1 回あたりの所要時間が長くなる点に注意。実行履歴は `/var/log/rsync/rsync_fileserver.log` に残り、CloudWatch Logs `/onprem/FileServer` の `rsync` ストリームに転送される。
+設定内容は `app/config/crontab/FileServer.conf` を参照。比較は mtime + size による高速モードで、毎時実行を前提に I/O 負荷を抑えている。実行履歴は `/var/log/rsync/rsync_fileserver.log` に残り、CloudWatch Logs `/onprem/FileServer` の `rsync` ストリームに転送される。
+
+> [!WARNING]
+> `--checksum` (内容ハッシュ比較) は 100TB 規模ではソース・宛先双方を全件読むため I/O 過大。**定期実行はしない**。
+> サイレント破損が疑われた場合のみ、対象を絞って手動でスポット検査する:
+>
+> ```bash
+> sudo /home/NaoyaOgura/file-servers/app/jobs/rsync_fileserver.sh --checksum --dry-run
+> ```
+>
+> 背景・代替手段の検討は [ADR-007](decisions/ADR-007-rsync-no-periodic-checksum.md) を参照。
 
 ## Backup Drive 管理 (BackupServer)
 
@@ -118,3 +128,4 @@ npx cdk deploy -c env=prod --all --profile FileServers
 - [How-to: CDK デプロイ](how-to/deploy-cdk.md)
 - [How-to: マウント復旧](how-to/mount-recovery.md)
 - [スクリプトリファレンス](reference/scripts.md)
+- [ADR-007: rsync `--checksum` を定期実行しない](decisions/ADR-007-rsync-no-periodic-checksum.md)
