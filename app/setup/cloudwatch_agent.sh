@@ -48,7 +48,7 @@ Ubuntu 26.04 (debian-family) のハイブリッドアクティベーション環
 
 引数:
   <設定ファイルパス>     設定ファイルのパス (必須)
-                         絶対パス、CWD 相対パス、または app/config/ 配下のファイル名 (例: FileServer.conf)
+                         絶対パス、CWD 相対パス、または app/config/cloudwatch_agent/ 配下のファイル名 (例: FileServer.conf)
 
 オプション:
   -h, --help             このヘルプを表示
@@ -108,13 +108,13 @@ load_config() {
     # 相対パス指定の場合は次の優先順位で解決:
     #   1. CWD 基準 (-f で既にチェック済み)
     #   2. スクリプト配置ディレクトリ基準 (app/setup/...)
-    #   3. app/config 基準 (FileServer.conf 等のファイル名のみ指定)
+    #   3. app/config/cloudwatch_agent 基準 (FileServer.conf 等のファイル名のみ指定)
     if [[ ! -f "${INPUT_CONFIG}" ]]; then
         local script_dir
         script_dir=$(cd "$(dirname "$0")" && pwd)
         local candidates=(
             "${script_dir}/${INPUT_CONFIG}"
-            "${script_dir}/../config/${INPUT_CONFIG}"
+            "${script_dir}/../config/cloudwatch_agent/${INPUT_CONFIG}"
         )
         local resolved=""
         for c in "${candidates[@]}"; do

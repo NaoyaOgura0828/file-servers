@@ -9,7 +9,7 @@
 set -euo pipefail
 
 readonly SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
-readonly CONFIG_NAME="rsync_logrotate.conf"
+readonly CONFIG_RELPATH="logrotate/rsync_fileserver.conf"
 readonly DEST_PATH="/etc/logrotate.d/rsync_fileserver"
 readonly LOG_FILE="/var/log/rsync/rsync_fileserver.log"
 readonly LOG_DIR=$(dirname "${LOG_FILE}")
@@ -34,7 +34,7 @@ show_help() {
 rsync ログ (${LOG_FILE}) の logrotate 設定を ${DEST_PATH} にインストールします。
 Ubuntu 26.04 の systemd-timer (logrotate.timer) または cron.daily から自動実行されます。
 
-設定内容 (app/config/${CONFIG_NAME}):
+設定内容 (app/config/${CONFIG_RELPATH}):
   - 頻度:           日次 (daily)
   - 保持世代:       30 日分
   - 圧縮:           gzip (delaycompress により最新世代は無圧縮)
@@ -82,8 +82,8 @@ ensure_logrotate_installed() {
 }
 
 resolve_source_config() {
-    # スクリプト配置ディレクトリ (app/setup) から見た相対パスで app/config/ を参照
-    local resolved="${SCRIPT_DIR}/../config/${CONFIG_NAME}"
+    # スクリプト配置ディレクトリ (app/setup) から見た相対パスで app/config/<purpose>/ を参照
+    local resolved="${SCRIPT_DIR}/../config/${CONFIG_RELPATH}"
     if [[ ! -f "${resolved}" ]]; then
         err "設定ファイルが見つかりません: ${resolved}"
     fi
