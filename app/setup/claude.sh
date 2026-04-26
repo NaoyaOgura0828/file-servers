@@ -14,6 +14,8 @@ set -euo pipefail
 readonly CLAUDE_INSTALLER_URL="https://claude.ai/install.sh"
 readonly CLAUDE_CONFIG_REPO_DEFAULT="https://github.com/NaoyaOgura0828/claude-settings.git"
 readonly CLAUDE_CONFIG_DIR="${HOME}/.claude"
+readonly ALIAS_RC_FILE="${HOME}/.bashrc"
+readonly ALIAS_LINE='alias claude-auto="claude --dangerously-skip-permissions"'
 
 # ----------------------------------------------------------------------------
 # Helpers
@@ -43,7 +45,9 @@ Claude Code をインストールし、個人設定 repo を ~/.claude/ にク�
   1. Claude Code を ${CLAUDE_INSTALLER_URL} 経由でインストール (~/.local/bin)
   2. 設定 repo を ~/.claude/ に clone
      - 既存 ~/.claude/ がある場合はタイムスタンプ付きでバックアップ
-  3. 認証案内 (\`claude login\`) を表示
+  3. ${ALIAS_RC_FILE} に claude-auto エイリアスを冪等追記
+     (alias claude-auto="claude --dangerously-skip-permissions")
+  4. 認証案内 (\`claude login\`) を表示
 
 注意:
   - **ユーザー権限で実行する** (sudo \$0 ではない)。
@@ -107,6 +111,7 @@ print_plan() {
     echo "  設定 repo:          ${CLAUDE_CONFIG_REPO}"
     echo "  設定 clone スキップ: ${SKIP_CONFIG}"
     echo "  ~/.claude 状態:     $([[ -d "${CLAUDE_CONFIG_DIR}" ]] && echo "存在 (バックアップして再 clone)" || echo "未作成")"
+    echo "  alias 追記先:       ${ALIAS_RC_FILE} (claude-auto)"
     echo "${sep}"
 }
 
@@ -171,6 +176,25 @@ setup_claude_config() {
 }
 
 # ----------------------------------------------------------------------------
+# Step 3: claude-auto エイリアスを ~/.bashrc に追記
+# ----------------------------------------------------------------------------
+
+setup_claude_alias() {
+    echo "Step 3: claude-auto エイリアスを ${ALIAS_RC_FILE} に追記"
+    if [[ -f "${ALIAS_RC_FILE}" ]] && grep -Fxq "${ALIAS_LINE}" "${ALIAS_RC_FILE}"; then
+        echo "  既に存在するためスキップ: ${ALIAS_LINE}"
+        return 0
+    fi
+    {
+        echo ""
+        echo "# Added by app/setup/claude.sh"
+        echo "${ALIAS_LINE}"
+    } >> "${ALIAS_RC_FILE}"
+    echo "  追記しました: ${ALIAS_LINE}"
+    echo "  反映には 'source ${ALIAS_RC_FILE}' または再ログインが必要です。"
+}
+
+# ----------------------------------------------------------------------------
 # サマリ
 # ----------------------------------------------------------------------------
 
@@ -190,10 +214,14 @@ ${sep}
   1. PATH 確認 (~/.local/bin がない場合):
        echo 'export PATH="\$HOME/.local/bin:\$PATH"' >> ~/.bashrc && source ~/.bashrc
 
-  2. ログイン (ブラウザが開く):
+  2. 追記済 alias を有効化 (シェル再起動 または):
+       source ${ALIAS_RC_FILE}
+       # 以降は 'claude-auto' で 'claude --dangerously-skip-permissions' を起動可能
+
+  3. ログイン (ブラウザが開く):
        claude login
 
-  3. 設定確認:
+  4. 設定確認:
        cat ~/.claude/CLAUDE.md
        ls ~/.claude/skills/
 ${sep}
@@ -213,6 +241,7 @@ main() {
 
     install_claude_code
     setup_claude_config
+    setup_claude_alias
     print_summary
 }
 
