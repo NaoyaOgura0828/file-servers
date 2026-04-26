@@ -1,0 +1,8 @@
+{
+  "FileServerDashboard": {
+    "DashboardName": "FileServer"
+  },
+  "BackupServerDashboard": {
+    "DashboardName": "BackupServer"
+  }
+}

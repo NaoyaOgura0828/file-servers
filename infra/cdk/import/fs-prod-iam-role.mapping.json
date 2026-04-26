@@ -1,0 +1,5 @@
+{
+  "SsmCloudWatchAgentE050AA52": {
+    "RoleName": "SSMCloudWatchAgentRole"
+  }
+}
