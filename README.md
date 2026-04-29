@@ -36,6 +36,8 @@ npm install
 npx cdk deploy -c env=prod --all --profile FileServers
 
 # 新サーバー (Ubuntu 26.04) のセットアップ (典型的順序)
+# admin が NaoyaOgura でない場合は最初にリネーム (別 TTY / 別管理ユーザーで実行)
+sudo app/setup/rename_user.sh ubuntu
 sudo app/setup/os_init.sh BackupServer.conf
 sudo app/setup/storage.sh BackupServer/timemachine.conf
 sudo app/setup/auto_mount.sh BackupServer/timemachine.conf

@@ -8,6 +8,7 @@
 
 | スクリプト | 実行権限 | 主な引数 | 役割 |
 |---|---|---|---|
+| `rename_user.sh` | root | `<old user> [--new-name]` | 既存ユーザーを `NaoyaOgura` にリネーム + `/home` 移動 (大文字許可は `--badname`) |
 | `os_init.sh` | root | `<config>` | hostname / timezone / locale / apt upgrade / unattended-upgrades |
 | `storage.sh` | root | `<config>` | 既存 LVM 検出 → fstab 登録 → mount |
 | `lvm_create.sh` | root | `<device> <vg> <lv> [--fs] [--size]` | 新規 PV/VG/LV 作成 + mkfs (デフォルト xfs) |
@@ -26,6 +27,13 @@
 | `activation.sh` | user (管理ホスト) | `<server name>` | SSM ハイブリッドアクティベーション発行 + 登録手順 MD 出力 |
 
 ### 各スクリプト詳細
+
+#### `rename_user.sh`
+- 引数: `<既存ユーザー名>` + `--new-name <name>` (デフォルト `NaoyaOgura`) + `-y/--yes`
+- 用途: Ubuntu 標準インストール時の admin (例: `ubuntu`) を `NaoyaOgura` に統一する初期化用ツール
+- ステップ: precheck (root / 対象ユーザー非実行 / 未ログイン / 未プロセス / `/home/<new>` 不在) → `usermod -l --badname` → `groupmod -n --badname` (primary group が同名のとき) → `usermod -d /home/<new> -m` → `/var/mail/<old>` → `/etc/sudoers.d/<old>` (中身置換 + リネーム) → `/var/spool/cron/crontabs/<old>` → `/var/lib/systemd/linger/<old>`
+- 大文字許可: Ubuntu 標準の `NAME_REGEX` は大文字を拒否するため `--badname` (shadow-utils 4.13+, Ubuntu 24.04 / 26.04) を付与する
+- 制約: 対象ユーザー自身のセッション (sudo / su 含む) からは実行不可。別 TTY または別管理ユーザーで root を取って実行する
 
 #### `os_init.sh`
 - 入力 config: `app/config/os_init/<server>.conf` (`HOSTNAME`, `TIMEZONE`, `LOCALE`, `EXTRA_PACKAGES`, `ENABLE_UNATTENDED_UPGRADES`)
