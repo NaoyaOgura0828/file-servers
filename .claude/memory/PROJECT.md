@@ -2,11 +2,10 @@
 name: file-servers project basics
 description: file-servers リポジトリの SystemName / AWS アカウント / リージョン / プロファイルなど基本情報
 type: project
+updated: 2026-04-26
 ---
 
 # File Servers プロジェクト基本情報
-
-更新日: 2026-04-26
 
 ## 識別子
 
