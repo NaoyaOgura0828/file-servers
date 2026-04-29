@@ -11,9 +11,14 @@
 # (--badname は shadow-utils 4.13+。Ubuntu 24.04 / 26.04 で利用可能。)
 #
 # 重要:
-#   - 対象ユーザーがログイン中・プロセス実行中のときは実行できない。
-#   - 対象ユーザー自身のセッション (sudo / su 含む) からは実行できない。
-#   - 別 TTY (Ctrl+Alt+F2) で root ログインするか、別の管理ユーザーから実行すること。
+#   - 対象ユーザーがログイン中・プロセス実行中の場合、別 TTY / 別管理ユーザーから
+#     実行する必要がある。
+#   - 対象ユーザー自身のセッション (sudo / su 含む) から呼ばれた場合は、既定で
+#     systemd transient unit に切り離してリネームを実行する (--auto-detach、既定 ON)。
+#     呼び出し元の SSH/TTY セッションはリネーム前に強制終了されるため、
+#     新ユーザー名で再接続してジャーナル / ログを確認する。
+#   - --no-auto-detach を指定すると従来の厳格な挙動 (即エラー) に戻る。
+#     その場合は別 TTY (Ctrl+Alt+F2) で root ログインするか、別の管理ユーザーから実行すること。
 
 set -euo pipefail
 
@@ -43,6 +48,9 @@ show_help() {
 
 オプション:
   --new-name <name>         新ユーザー名 (デフォルト: ${DEFAULT_NEW_USER})
+  --auto-detach             対象ユーザーセッションから呼ばれた場合に systemd
+                            transient unit に切り離して実行する (既定 ON)
+  --no-auto-detach          上記を無効化し、対象ユーザーセッションからは即エラー
   -y, --yes                 確認プロンプトをスキップ
   -h, --help                このヘルプを表示
 
@@ -55,10 +63,17 @@ show_help() {
   6. /var/spool/cron/crontabs/<old> をリネーム
   7. /var/lib/systemd/linger/<old> をリネーム
 
+auto-detach モード (既定):
+  対象ユーザーのセッションから呼ばれた場合、systemd-run で system.slice 配下の
+  transient unit に切り離して実行する。unit 内で対象ユーザーのセッション/プロセスを
+  loginctl + pkill で全停止してからリネームを実行する。呼び出し元 SSH は切断される
+  ため、新ユーザー名で再接続して以下で結果を確認:
+    journalctl -u <unit-name>.service
+    cat /var/log/rename-user.log
+
 注意:
   - root 権限で実行すること: sudo $0 ...
-  - 対象ユーザーがログイン中 / プロセス実行中の場合は中止する
-  - 対象ユーザー自身のセッション (sudo / su 含む) からは実行不可
+  - 対象ユーザーがログイン中 / プロセス実行中の場合、--no-auto-detach 指定時はエラー
   - SSH 認証 / 鍵 / .bashrc など旧 home 内のパスを参照する設定は手動確認が必要
 EOF
 }
@@ -70,6 +85,8 @@ EOF
 OLD_USER=""
 NEW_USER="${DEFAULT_NEW_USER}"
 ASSUME_YES="no"
+AUTO_DETACH="yes"
+DETACH_NEEDED="no"
 
 parse_args() {
     if [[ $# -eq 0 ]]; then
@@ -87,6 +104,8 @@ parse_args() {
                 shift
                 ;;
             -y|--yes) ASSUME_YES="yes"; shift ;;
+            --auto-detach) AUTO_DETACH="yes"; shift ;;
+            --no-auto-detach) AUTO_DETACH="no"; shift ;;
             -*) err "不明なオプション: $1" ;;
             *)
                 if [[ -z "${OLD_USER}" ]]; then
@@ -125,19 +144,34 @@ precheck() {
         err "/home/${NEW_USER} が既に存在します。事前に退避してください。"
     fi
 
-    if [[ "$(id -un)" == "${OLD_USER}" ]] || [[ "${SUDO_USER:-}" == "${OLD_USER}" ]]; then
-        err "対象ユーザー (${OLD_USER}) のセッションから実行することはできません。別 TTY / 別管理ユーザーから実行してください。"
+    # 同一セッション判定 (sudo/su も含む)。
+    # - RENAME_USER_DETACHED=1 (デタッチ後の子プロセス) の場合はスキップ
+    # - --auto-detach の場合は DETACH_NEEDED=yes を立てて main で分岐
+    # - --no-auto-detach の場合は従来通り即エラー
+    if [[ "${RENAME_USER_DETACHED:-}" != "1" ]] \
+       && { [[ "$(id -un)" == "${OLD_USER}" ]] || [[ "${SUDO_USER:-}" == "${OLD_USER}" ]]; }; then
+        if [[ "${AUTO_DETACH}" == "yes" ]]; then
+            command -v systemd-run >/dev/null 2>&1 \
+                || err "対象ユーザー (${OLD_USER}) のセッションから呼ばれましたが systemd-run が見つかりません。--no-auto-detach を指定して別 TTY から実行してください。"
+            DETACH_NEEDED="yes"
+        else
+            err "対象ユーザー (${OLD_USER}) のセッションから実行することはできません。別 TTY / 別管理ユーザーから実行してください (または --auto-detach を指定)。"
+        fi
     fi
 
-    if loginctl list-users --no-legend 2>/dev/null | awk '{print $2}' | grep -qx "${OLD_USER}"; then
-        err "対象ユーザー (${OLD_USER}) がログイン中です。先にログアウトしてください: loginctl terminate-user ${OLD_USER}"
-    fi
-    if who 2>/dev/null | awk '{print $1}' | grep -qx "${OLD_USER}"; then
-        err "対象ユーザー (${OLD_USER}) のセッションがあります。先にログアウトしてください。"
-    fi
+    # ログイン中ユーザー / 残プロセスのチェック。
+    # auto-detach の場合は子プロセス側で kill するためスキップ。
+    if [[ "${DETACH_NEEDED}" != "yes" ]]; then
+        if loginctl list-users --no-legend 2>/dev/null | awk '{print $2}' | grep -qx "${OLD_USER}"; then
+            err "対象ユーザー (${OLD_USER}) がログイン中です。先にログアウトしてください: loginctl terminate-user ${OLD_USER}"
+        fi
+        if who 2>/dev/null | awk '{print $1}' | grep -qx "${OLD_USER}"; then
+            err "対象ユーザー (${OLD_USER}) のセッションがあります。先にログアウトしてください。"
+        fi
 
-    if pgrep -u "${OLD_USER}" >/dev/null 2>&1; then
-        err "対象ユーザー (${OLD_USER}) のプロセスが残っています。先に終了してください: pkill -KILL -u ${OLD_USER}"
+        if pgrep -u "${OLD_USER}" >/dev/null 2>&1; then
+            err "対象ユーザー (${OLD_USER}) のプロセスが残っています。先に終了してください: pkill -KILL -u ${OLD_USER}"
+        fi
     fi
 
     # --badname サポート確認 (Ubuntu 26.04 想定では存在するはず)
@@ -175,6 +209,11 @@ print_plan() {
     else
         echo "  primary group リネーム:  no (旧ユーザー名と異なるため)"
     fi
+    if [[ "${DETACH_NEEDED}" == "yes" ]]; then
+        echo ""
+        echo "  実行モード:              auto-detach (systemd transient unit に切り離して実行)"
+        echo "                            呼び出し元 SSH/TTY セッションは強制終了されます。"
+    fi
     echo "${sep}"
 }
 
@@ -188,6 +227,82 @@ confirm_or_abort() {
         [yY]) return 0 ;;
         *) echo "中止しました。"; exit 0 ;;
     esac
+}
+
+# ----------------------------------------------------------------------------
+# auto-detach 実行
+# ----------------------------------------------------------------------------
+
+# 対象ユーザーセッションから呼ばれた場合に、systemd transient unit に切り離して
+# リネームを実行する。
+#
+# 流れ:
+#   1. このスクリプト自身を /usr/local/sbin/.rename-user-detached.sh に複製
+#      (旧 home が移動するため、リネーム実行中も読める安定した場所が必要)
+#   2. systemd-run で system.slice 配下に transient unit を起動
+#   3. unit 内で sleep → loginctl terminate-user → pkill で対象ユーザーを完全停止
+#   4. 複製したスクリプトを RENAME_USER_DETACHED=1 + --yes で再実行
+#   5. 親プロセス (このスクリプト) は exit 0 で速やかに終了
+#      (残っていても直後の pkill で SIGKILL される)
+run_detached() {
+    local detached_script="/usr/local/sbin/.rename-user-detached.sh"
+    install -m 0700 -o root -g root "${BASH_SOURCE[0]}" "${detached_script}" \
+        || err "${detached_script} へのコピーに失敗しました。"
+
+    local log_file="/var/log/rename-user.log"
+    : > "${log_file}"
+    chmod 0600 "${log_file}"
+
+    local unit="rename-user-$(date +%s)-$$"
+
+    cat <<EOF
+
+==============================================================================
+対象ユーザー (${OLD_USER}) のセッションから呼ばれたため、systemd transient
+unit に切り離してリネームを実行します。
+
+  unit:    ${unit}.service
+  log:     ${log_file}
+
+このセッションは数秒以内に切断されます。
+新ユーザー (${NEW_USER}) で再接続後、以下で結果を確認してください:
+
+  journalctl -u ${unit}.service --no-pager
+  cat ${log_file}
+==============================================================================
+EOF
+    sleep 3
+
+    # bash -c の本体は親シェルが二重引用符内で展開する。
+    # - \${OLD_USER} 等は親シェルで展開済みの文字列になる
+    # - \\\$rc / \\\$? 等は子シェルで評価される
+    # - シングルクォート '...' は子シェルでの quoting (リテラル化) のため
+    systemd-run \
+        --unit="${unit}" \
+        --slice=system.slice \
+        --description="Rename ${OLD_USER} -> ${NEW_USER}" \
+        --setenv=RENAME_USER_DETACHED=1 \
+        --working-directory=/ \
+        /bin/bash -c "
+exec >> '${log_file}' 2>&1
+echo \"[detach] \$(date -Is) starting detach wrapper\"
+sleep 5
+echo \"[detach] \$(date -Is) terminating sessions for ${OLD_USER}\"
+loginctl terminate-user '${OLD_USER}' 2>&1 || true
+sleep 2
+pkill -KILL -u '${OLD_USER}' 2>&1 || true
+sleep 1
+pkill -KILL -u '${OLD_USER}' 2>&1 || true
+sleep 1
+echo \"[detach] \$(date -Is) invoking rename script\"
+'${detached_script}' '${OLD_USER}' --new-name '${NEW_USER}' --yes --no-auto-detach
+rc=\$?
+echo \"[detach] \$(date -Is) rename script exited rc=\$rc\"
+rm -f '${detached_script}'
+exit \$rc
+"
+
+    exit 0
 }
 
 # ----------------------------------------------------------------------------
@@ -345,6 +460,12 @@ main() {
     collect_state
     print_plan
     confirm_or_abort
+
+    if [[ "${DETACH_NEEDED}" == "yes" ]]; then
+        run_detached
+        # run_detached は exit するので戻らない
+        exit 0
+    fi
 
     rename_login
     rename_primary_group
