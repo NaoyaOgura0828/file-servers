@@ -160,8 +160,12 @@ precheck() {
     fi
 
     # ログイン中ユーザー / 残プロセスのチェック。
-    # auto-detach の場合は子プロセス側で kill するためスキップ。
-    if [[ "${DETACH_NEEDED}" != "yes" ]]; then
+    # スキップ条件:
+    #   - DETACH_NEEDED=yes (auto-detach の親プロセス)。子側で kill するため。
+    #   - RENAME_USER_DETACHED=1 (auto-detach の子プロセス)。wrapper が事前に
+    #     loginctl + pkill でクリア済みであり、user@UID.service の停止待ちで
+    #     loginctl が一瞬だけユーザーを表示する偽陽性を避けるため。
+    if [[ "${DETACH_NEEDED}" != "yes" ]] && [[ "${RENAME_USER_DETACHED:-}" != "1" ]]; then
         if loginctl list-users --no-legend 2>/dev/null | awk '{print $2}' | grep -qx "${OLD_USER}"; then
             err "対象ユーザー (${OLD_USER}) がログイン中です。先にログアウトしてください: loginctl terminate-user ${OLD_USER}"
         fi
@@ -287,13 +291,41 @@ EOF
 exec >> '${log_file}' 2>&1
 echo \"[detach] \$(date -Is) starting detach wrapper\"
 sleep 5
+
+old_uid=\$(id -u '${OLD_USER}' 2>/dev/null || echo '')
+
+echo \"[detach] \$(date -Is) disabling linger for ${OLD_USER}\"
+loginctl disable-linger '${OLD_USER}' 2>&1 || true
+
 echo \"[detach] \$(date -Is) terminating sessions for ${OLD_USER}\"
 loginctl terminate-user '${OLD_USER}' 2>&1 || true
-sleep 2
-pkill -KILL -u '${OLD_USER}' 2>&1 || true
-sleep 1
-pkill -KILL -u '${OLD_USER}' 2>&1 || true
-sleep 1
+
+if [[ -n \"\$old_uid\" ]]; then
+    echo \"[detach] \$(date -Is) stopping user@\${old_uid}.service\"
+    systemctl stop \"user@\${old_uid}.service\" 2>&1 || true
+fi
+
+# 残プロセスと loginctl 状態がクリアになるまでポーリング (最大 ~15s)
+for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
+    pkill -KILL -u '${OLD_USER}' 2>&1 || true
+    sleep 1
+    has_proc=\"no\"
+    has_session=\"no\"
+    pgrep -u '${OLD_USER}' >/dev/null 2>&1 && has_proc=\"yes\"
+    if loginctl list-users --no-legend 2>/dev/null | awk '{print \$2}' | grep -qx '${OLD_USER}'; then
+        has_session=\"yes\"
+    fi
+    if [[ \"\$has_proc\" == \"no\" ]] && [[ \"\$has_session\" == \"no\" ]]; then
+        echo \"[detach] \$(date -Is) sessions and processes cleared after \${i}s\"
+        break
+    fi
+done
+
+if pgrep -u '${OLD_USER}' >/dev/null 2>&1; then
+    echo \"[detach] \$(date -Is) WARN: processes still remain after kill loop:\"
+    pgrep -au '${OLD_USER}' 2>&1 || true
+fi
+
 echo \"[detach] \$(date -Is) invoking rename script\"
 '${detached_script}' '${OLD_USER}' --new-name '${NEW_USER}' --yes --no-auto-detach
 rc=\$?
