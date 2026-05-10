@@ -83,6 +83,7 @@ BackupServer の `/mnt/timemachine` は USB 接続 1 台。物理着脱時の手
 | SSM Agent | `/var/log/amazon/ssm/amazon-ssm-agent.log` |
 | CloudWatch Agent | `/opt/aws/amazon-cloudwatch-agent/logs/amazon-cloudwatch-agent.log` |
 | Samba | `/var/log/samba/log.smbd` / `log.nmbd` |
+| Samba 監査 (FileServer) | `/var/log/samba/audit.log` (CloudWatch Logs `/onprem/FileServer` の `smb-audit` ストリーム) |
 | rsync | `/var/log/rsync/rsync_fileserver.log` |
 | systemd | `journalctl -u <unit> --no-pager -n 50` |
 | udev | `journalctl -t systemd-udevd --no-pager -n 50` |
@@ -115,7 +116,8 @@ npx cdk deploy -c env=prod --all --profile FileServers
 
 | 症状 | 着眼点 |
 |---|---|
-| SMB クライアントが繋がらない | `systemctl status smbd nmbd`、`hosts allow` の CIDR、`testparm -s` |
+| SMB クライアントが繋がらない | `systemctl status smbd nmbd`、`hosts allow` の CIDR、`testparm -s`、smbd ログに `init_bitmap: Could not find opname` ([ADR-008](decisions/ADR-008-smb-vfs-full-audit.md)) |
+| SMB 監査ログが CW Logs に出ない | `tail /var/log/samba/audit.log` でローカル出力確認、`testparm -s | grep full_audit`、`rsyslog` 状態、`amazon-cloudwatch-agent.json` の `collect_list` ([how-to/smb-audit-logs.md](how-to/smb-audit-logs.md)) |
 | Time Machine が検出されない | `avahi-browse -r _adisk._tcp` で広告確認、`avahi-daemon` の状態 |
 | CloudWatch にメトリクスが出ない | Agent ログ、IAM Role (`SSMCloudWatchAgentRole`)、`/root/.aws/credentials` |
 | マウントが消えた | `dmesg`、`pvs` / `vgs` / `lvs`、USB 物理接続、`auto_mount.sh` の service ログ |
@@ -127,5 +129,7 @@ npx cdk deploy -c env=prod --all --profile FileServers
 - [新サーバー構築](tutorials/new-server-setup.md)
 - [How-to: CDK デプロイ](how-to/deploy-cdk.md)
 - [How-to: マウント復旧](how-to/mount-recovery.md)
+- [How-to: SMB アクセスログを CloudWatch Logs に転送する](how-to/smb-audit-logs.md)
 - [スクリプトリファレンス](reference/scripts.md)
 - [ADR-007: rsync `--checksum` を定期実行しない](decisions/ADR-007-rsync-no-periodic-checksum.md)
+- [ADR-008: vfs_full_audit + rsyslog + CloudWatch Logs](decisions/ADR-008-smb-vfs-full-audit.md)

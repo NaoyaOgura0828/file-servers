@@ -19,7 +19,7 @@
 | `aws_cli.sh` | user | `[<config path>]` | AWS CLI v2 導入 + `~/.aws/config` 配置 |
 | `ssm_agent.sh` | root | `<activation JSON>` | SSM Agent 導入 + ハイブリッド登録 |
 | `cloudwatch_agent.sh` | root | `<config>` | CloudWatch Agent 導入 + 設定 + 起動 |
-| `samba.sh` | root | `<config>` | Samba (smbd/nmbd + Avahi) + Time Machine 設定 |
+| `samba.sh` | root | `<config>` | Samba (smbd/nmbd + Avahi) + Time Machine + SMB 監査ログ (オプション) |
 | `logrotate.sh` | root | (なし) | rsync ログ用 logrotate 設定の配置 |
 | `crontab.sh` | root | `<config> [--remove]` | `/etc/cron.d/<name>` を冪等配置 (定期ジョブ登録) |
 | `docker.sh` | user | `[--codename <name>] [--skip-group]` | Docker CE + plugins 導入 |
@@ -80,8 +80,10 @@
 - ステップ: amazon-cloudwatch-agent.deb (arch 自動) 導入 → JSON 設定生成 → systemd unit 上書き (IMDS 無効化) → `/root/.aws/config` + common-config.toml 配置 → SSM Parameter Store にバックアップ → fetch-config + 起動 → ステータス確認
 
 #### `samba.sh`
-- 入力 config: `app/config/samba/<server>.conf` (`SERVER_NAME`, `NETBIOS_NAME`, `WORKGROUP`, `SERVER_STRING`, `SHARE_NAME`, `SHARE_PATH`, `SHARE_VALID_USER`, `SHARE_TIMEMACHINE_MAX_SIZE`, `HOSTS_ALLOW`, `INTERFACES`, `ENABLE_AVAHI`, `ENABLE_FRUIT`)
-- ステップ: apt 導入 → 共有ディレクトリ確保 → Unix ユーザー確保 (既存ならスキップ) → smbpasswd 対話 → smb.conf 生成 → Avahi service (条件付き) → testparm → `enable --now smbd nmbd avahi-daemon`
+- 入力 config: `app/config/samba/<server>.conf` (`SERVER_NAME`, `NETBIOS_NAME`, `WORKGROUP`, `SERVER_STRING`, `SHARE_NAME`, `SHARE_PATH`, `SHARE_VALID_USER`, `SHARE_TIMEMACHINE_MAX_SIZE`, `HOSTS_ALLOW`, `INTERFACES`, `ENABLE_AVAHI`, `ENABLE_FRUIT`, `ENABLE_AUDIT`)
+- ステップ: apt 導入 → 共有ディレクトリ確保 → Unix ユーザー確保 (既存ならスキップ) → smbpasswd 対話 → smb.conf 生成 → Avahi service (条件付き) → audit ログ設定 (rsyslog drop-in + logrotate, ENABLE_AUDIT 条件付き) → testparm → `enable --now smbd nmbd avahi-daemon` (+ rsyslog 再起動)
+- `ENABLE_AUDIT="yes"` のとき `vfs_full_audit` を smb.conf に注入し、`/etc/rsyslog.d/40-samba-audit.conf` と `/etc/logrotate.d/samba_audit` を配置、`/var/log/samba/audit.log` を初期化する。`ENABLE_AUDIT="no"` のときはこれらを撤去する (冪等)
+- 監査対象操作: `connect disconnect mkdirat unlinkat renameat fchmod fchown` (Samba 4.18+ の "-at" 系 opname。旧名 `mkdir` 等を書くと `init_bitmap: Could not find opname` で全接続拒否される)。詳細は [ADR-008](../decisions/ADR-008-smb-vfs-full-audit.md)
 
 #### `logrotate.sh`
 - 入力 config: `app/config/logrotate/rsync_fileserver.conf` (logrotate 形式そのもの)
@@ -146,3 +148,5 @@ sudo /home/NaoyaOgura/file-servers/app/jobs/rsync_fileserver.sh --checksum --dry
 - [設定ファイルリファレンス](configurations.md)
 - [メトリクスリファレンス](metrics.md)
 - [新サーバー構築チュートリアル](../tutorials/new-server-setup.md)
+- [How-to: SMB アクセスログを CloudWatch Logs に転送する](../how-to/smb-audit-logs.md)
+- [ADR-008: vfs_full_audit + rsyslog + CloudWatch Logs](../decisions/ADR-008-smb-vfs-full-audit.md)

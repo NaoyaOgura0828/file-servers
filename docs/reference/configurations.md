@@ -16,7 +16,8 @@ app/config/
 │   ├── FileServer.conf
 │   └── sample.conf
 ├── logrotate/
-│   └── rsync_fileserver.conf           # logrotate 形式そのもの
+│   ├── rsync_fileserver.conf           # logrotate 形式そのもの
+│   └── samba_audit.conf                # logrotate 形式そのもの (samba.sh が ENABLE_AUDIT=yes 時に配置)
 ├── network/
 │   ├── BackupServer.conf
 │   └── sample.conf
@@ -24,6 +25,8 @@ app/config/
 │   ├── BackupServer.conf
 │   ├── FileServer.conf
 │   └── sample.conf
+├── rsyslog/
+│   └── samba_audit.conf                # rsyslog drop-in (LOCAL5 → /var/log/samba/audit.log)
 ├── samba/
 │   ├── BackupServer.conf
 │   ├── FileServer.conf
@@ -92,6 +95,14 @@ PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin
 
 logrotate 設定そのもの。`logrotate.sh` が `/etc/logrotate.d/rsync_fileserver` に install -m 644 で配置。
 
+### `logrotate/samba_audit.conf`
+
+logrotate 設定そのもの。`samba.sh` が `ENABLE_AUDIT="yes"` のとき `/etc/logrotate.d/samba_audit` に install -m 644 で配置する (`ENABLE_AUDIT="no"` 時は撤去)。daily / 30 世代 / postrotate で rsyslog にファイル再オープンを通知 ([ADR-008](../decisions/ADR-008-smb-vfs-full-audit.md))。
+
+### `rsyslog/samba_audit.conf`
+
+rsyslog drop-in そのもの。`samba.sh` が `ENABLE_AUDIT="yes"` のとき `/etc/rsyslog.d/40-samba-audit.conf` に install -m 644 で配置する。`local5.* /var/log/samba/audit.log` + `& stop` で LOCAL5 ファシリティを Samba 監査専用に振り分ける ([ADR-008](../decisions/ADR-008-smb-vfs-full-audit.md))。
+
 ### `network/<server>.conf`
 
 ```bash
@@ -131,12 +142,14 @@ HOSTS_ALLOW="192.168.0.0/16 127.0.0.1"
 INTERFACES=""                              # 空 = 全 NIC で待ち受け
 ENABLE_AVAHI="yes"                         # mDNS で macOS 自動検出
 ENABLE_FRUIT="yes"                         # vfs_fruit (Time Machine 必須)
+ENABLE_AUDIT="no"                          # vfs_full_audit による SMB アクセス監査 (ADR-008)
 ```
 
 | 変数 | 必須 | 補足 |
 |---|---|---|
 | `SHARE_TIMEMACHINE_MAX_SIZE` | — | Time Machine 用途のとき (1T / 2T / 500G 形式) |
-| `ENABLE_FRUIT` | ✓ | "yes" で `vfs objects = catia fruit streams_xattr` |
+| `ENABLE_FRUIT` | ✓ | "yes" で `vfs objects` に `catia fruit streams_xattr` を追加 |
+| `ENABLE_AUDIT` | ✓ | "yes" で `vfs objects` に `full_audit` を追加し、`/var/log/samba/audit.log` へ出力 + rsyslog drop-in と logrotate を配置。FileServer=yes / BackupServer=no が原則 ([ADR-008](../decisions/ADR-008-smb-vfs-full-audit.md)) |
 
 ### `storage/<server>/<role>.conf`
 
@@ -183,3 +196,4 @@ sudo app/setup/storage.sh FileServer/fileserver-backup.conf
 - [メトリクスリファレンス](metrics.md)
 - [ADR-002: config を目的別ディレクトリに分割](../decisions/ADR-002-app-config-purpose-split.md)
 - [ADR-007: rsync `--checksum` を定期実行しない](../decisions/ADR-007-rsync-no-periodic-checksum.md)
+- [ADR-008: SMB アクセスログを vfs_full_audit + CloudWatch Logs で収集](../decisions/ADR-008-smb-vfs-full-audit.md)
