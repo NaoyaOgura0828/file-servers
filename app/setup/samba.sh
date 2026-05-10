@@ -435,9 +435,17 @@ write_audit_log_setup() {
     sudo install -m 644 -o root -g root "${logrotate_src}" "${AUDIT_LOGROTATE_DEST}"
     echo "  配置: ${AUDIT_LOGROTATE_DEST}"
 
+    # rsyslog は Ubuntu 既定で syslog:adm で稼働するため、ログファイルもこのオーナーで作成する。
+    # /var/log/samba/ は drwxr-x--- root:adm のため、syslog がディレクトリへの新規作成権を持たない。
+    # 事前に syslog:adm 0640 で用意することで rsyslog が append のみで動けるようにする。
     if [[ ! -f "${AUDIT_LOG_PATH}" ]]; then
-        sudo install -m 640 -o root -g adm /dev/null "${AUDIT_LOG_PATH}"
-        echo "  作成: ${AUDIT_LOG_PATH} (640 root:adm)"
+        sudo install -m 640 -o syslog -g adm /dev/null "${AUDIT_LOG_PATH}"
+        echo "  作成: ${AUDIT_LOG_PATH} (640 syslog:adm)"
+    else
+        # 旧バージョンで root:adm 0640 で作成された場合に rsyslog が omfile suspended になる事故を防ぐ
+        sudo chown syslog:adm "${AUDIT_LOG_PATH}"
+        sudo chmod 640 "${AUDIT_LOG_PATH}"
+        echo "  既存ファイルのオーナー/モードを syslog:adm 0640 に正規化"
     fi
 
     if sudo logrotate -d "${AUDIT_LOGROTATE_DEST}" >/dev/null 2>&1; then
