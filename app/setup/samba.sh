@@ -48,12 +48,14 @@ Ubuntu 26.04 のハイブリッドファイルサーバー / Time Machine スト
   SHARE_NAME / SHARE_PATH / SHARE_VALID_USER / SHARE_TIMEMACHINE_MAX_SIZE
   HOSTS_ALLOW / INTERFACES
   ENABLE_AVAHI / ENABLE_FRUIT / ENABLE_AUDIT
+  AUDIT_SUCCESS_OPS (任意; 既定はメタデータ監査セット)
   詳細は app/config/samba/sample.conf を参照。
 
 ENABLE_AUDIT="yes" の場合の追加動作:
   - vfs_full_audit による SMB アクセスログを ${AUDIT_LOG_PATH} へ出力
   - rsyslog drop-in (${AUDIT_RSYSLOG_DEST}) と logrotate (${AUDIT_LOGROTATE_DEST}) を配置
   - CloudWatch Agent 設定 (app/config/cloudwatch_agent/) の LOG_PATHS で当該ファイルを参照すること
+  - AUDIT_SUCCESS_OPS で監査対象操作を上書き可能 (例: "connect disconnect" で接続ログのみ)
 
 前提:
   - sudo 実行可能なユーザーで起動
@@ -129,6 +131,10 @@ load_config() {
             err "設定ファイルに ${v} が定義されていません: ${INPUT_CONFIG}"
         fi
     done
+
+    # AUDIT_SUCCESS_OPS は省略可能。未定義/空ならメタデータ監査のデフォルトセットを使う。
+    # "connect disconnect" のみ指定すれば接続ログだけのアクセス監査として運用できる。
+    : "${AUDIT_SUCCESS_OPS:=connect disconnect mkdirat unlinkat renameat fchmod fchown}"
 }
 
 # ----------------------------------------------------------------------------
@@ -160,7 +166,7 @@ print_plan() {
     echo "  vfs_full_audit:       ${ENABLE_AUDIT}"
     if [[ "${ENABLE_AUDIT}" == "yes" ]]; then
         echo "  監査ログ出力先:       ${AUDIT_LOG_PATH}"
-        echo "  監査対象操作:         connect disconnect mkdirat unlinkat renameat fchmod fchown"
+        echo "  監査対象操作:         ${AUDIT_SUCCESS_OPS}"
     fi
     echo "${sep}"
 }
@@ -306,9 +312,9 @@ EOF
 
    # SMB アクセス監査 (vfs_full_audit) - LOCAL5 経由で ${AUDIT_LOG_PATH} へ出力
    # opname は Samba 4.18+ の VFS "-at" 系統合に追従 (mkdirat / unlinkat / renameat / fchmod / fchown)
-   # unlinkat は rmdir と unlink の双方を包括する。
+   # unlinkat は rmdir と unlink の双方を包括する。AUDIT_SUCCESS_OPS で操作セットを上書き可能。
    full_audit:prefix = %u|%I|%S
-   full_audit:success = connect disconnect mkdirat unlinkat renameat fchmod fchown
+   full_audit:success = ${AUDIT_SUCCESS_OPS}
    full_audit:failure = connect
    full_audit:facility = LOCAL5
    full_audit:priority = NOTICE

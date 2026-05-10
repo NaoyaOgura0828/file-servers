@@ -142,14 +142,16 @@ HOSTS_ALLOW="192.168.0.0/16 127.0.0.1"
 INTERFACES=""                              # 空 = 全 NIC で待ち受け
 ENABLE_AVAHI="yes"                         # mDNS で macOS 自動検出
 ENABLE_FRUIT="yes"                         # vfs_fruit (Time Machine 必須)
-ENABLE_AUDIT="no"                          # vfs_full_audit による SMB アクセス監査 (ADR-008)
+ENABLE_AUDIT="yes"                         # vfs_full_audit による SMB アクセス監査 (ADR-008)
+AUDIT_SUCCESS_OPS="connect disconnect"     # 監査する VFS 操作セット (任意。省略時はメタデータデフォルト)
 ```
 
 | 変数 | 必須 | 補足 |
 |---|---|---|
 | `SHARE_TIMEMACHINE_MAX_SIZE` | — | Time Machine 用途のとき (1T / 2T / 500G 形式) |
 | `ENABLE_FRUIT` | ✓ | "yes" で `vfs objects` に `catia fruit streams_xattr` を追加 |
-| `ENABLE_AUDIT` | ✓ | "yes" で `vfs objects` に `full_audit` を追加し、`/var/log/samba/audit.log` へ出力 + rsyslog drop-in と logrotate を配置。FileServer=yes / BackupServer=no が原則 ([ADR-008](../decisions/ADR-008-smb-vfs-full-audit.md)) |
+| `ENABLE_AUDIT` | ✓ | "yes" で `vfs objects` に `full_audit` を追加し、`/var/log/samba/audit.log` へ出力 + rsyslog drop-in と logrotate を配置 ([ADR-008](../decisions/ADR-008-smb-vfs-full-audit.md)) |
+| `AUDIT_SUCCESS_OPS` | — | `full_audit:success` に渡す op リスト (空白区切り)。省略時は `connect disconnect mkdirat unlinkat renameat fchmod fchown`。BackupServer は `"connect disconnect"` で接続ログのみに絞る |
 
 ### `storage/<server>/<role>.conf`
 

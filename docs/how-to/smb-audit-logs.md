@@ -1,11 +1,13 @@
 # How-to: SMB アクセスログを CloudWatch Logs に転送する
 
-FileServer の SMB 共有に対する操作 (接続/切断/ディレクトリ作成/削除/リネーム/権限変更) を構造化監査ログとして `/var/log/samba/audit.log` に出力し、CloudWatch Logs に転送する。
+FileServer / BackupServer の SMB 共有に対する操作を構造化監査ログとして `/var/log/samba/audit.log` に出力し、CloudWatch Logs に転送する。サーバーごとに監査対象操作のセットを切り替えられる。
 
 ## 目的
 
 - 「誰が・どの IP から・どの共有に対して・何の操作をしたか」を CloudWatch Logs Insights で検索可能にする
-- BackupServer (Time Machine) は対象外 (rename/unlink 大量発生による CW Logs コスト/ノイズ抑止のため、[ADR-008](../decisions/ADR-008-smb-vfs-full-audit.md))
+- サーバーの用途に応じて監査の粒度を調整する:
+  - **FileServer**: メタデータ操作セット (接続/切断 + ディレクトリ作成/削除/リネーム/権限変更)
+  - **BackupServer**: 接続イベントのみ (`connect` / `disconnect`)。Time Machine の rename/unlink 大量発生を避け、CW Logs ingestion を抑制 ([ADR-008](../decisions/ADR-008-smb-vfs-full-audit.md))
 
 ## 前提条件
 
@@ -40,15 +42,29 @@ smbd (vfs_full_audit) ──syslog(LOCAL5)──> rsyslog (40-samba-audit.conf)
 
 ## 監査対象操作
 
-| opname | 意味 |
-|---|---|
-| `connect` | 共有への接続 |
-| `disconnect` | 共有からの切断 |
-| `mkdirat` | ディレクトリ作成 |
-| `unlinkat` | ファイル削除 / ディレクトリ削除 (rmdir 相当) |
-| `renameat` | リネーム / 移動 |
-| `fchmod` | パーミッション変更 |
-| `fchown` | 所有者変更 |
+`AUDIT_SUCCESS_OPS` (samba conf の任意変数) で操作セットを上書きできる。未指定なら下記デフォルトセット。
+
+| opname | 意味 | FileServer | BackupServer |
+|---|---|---|---|
+| `connect` | 共有への接続 | ✅ | ✅ |
+| `disconnect` | 共有からの切断 | ✅ | ✅ |
+| `mkdirat` | ディレクトリ作成 | ✅ | — |
+| `unlinkat` | ファイル削除 / ディレクトリ削除 (rmdir 相当) | ✅ | — |
+| `renameat` | リネーム / 移動 | ✅ | — |
+| `fchmod` | パーミッション変更 | ✅ | — |
+| `fchown` | 所有者変更 | ✅ | — |
+
+設定ファイルの指定例:
+
+```bash
+# FileServer (デフォルト = メタデータ監査セット)
+ENABLE_AUDIT="yes"
+# AUDIT_SUCCESS_OPS は未指定でよい (省略でデフォルト)
+
+# BackupServer (接続イベントのみ)
+ENABLE_AUDIT="yes"
+AUDIT_SUCCESS_OPS="connect disconnect"
+```
 
 > [!IMPORTANT]
 > Samba 4.18+ で VFS が "-at" 系に統合されたため、旧名 (`mkdir` / `rmdir` / `unlink` / `rename` / `chmod` / `chown`) を smb.conf に書くと **`init_bitmap: Could not find opname mkdir` エラーで全接続が拒否**される。詳細は [ADR-008](../decisions/ADR-008-smb-vfs-full-audit.md#opname-の-at-系統合への追従) を参照。

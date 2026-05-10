@@ -80,10 +80,10 @@
 - ステップ: amazon-cloudwatch-agent.deb (arch 自動) 導入 → JSON 設定生成 → systemd unit 上書き (IMDS 無効化) → `/root/.aws/config` + common-config.toml 配置 → SSM Parameter Store にバックアップ → fetch-config + 起動 → ステータス確認
 
 #### `samba.sh`
-- 入力 config: `app/config/samba/<server>.conf` (`SERVER_NAME`, `NETBIOS_NAME`, `WORKGROUP`, `SERVER_STRING`, `SHARE_NAME`, `SHARE_PATH`, `SHARE_VALID_USER`, `SHARE_TIMEMACHINE_MAX_SIZE`, `HOSTS_ALLOW`, `INTERFACES`, `ENABLE_AVAHI`, `ENABLE_FRUIT`, `ENABLE_AUDIT`)
+- 入力 config: `app/config/samba/<server>.conf` (`SERVER_NAME`, `NETBIOS_NAME`, `WORKGROUP`, `SERVER_STRING`, `SHARE_NAME`, `SHARE_PATH`, `SHARE_VALID_USER`, `SHARE_TIMEMACHINE_MAX_SIZE`, `HOSTS_ALLOW`, `INTERFACES`, `ENABLE_AVAHI`, `ENABLE_FRUIT`, `ENABLE_AUDIT`, `AUDIT_SUCCESS_OPS` (任意))
 - ステップ: apt 導入 → 共有ディレクトリ確保 → Unix ユーザー確保 (既存ならスキップ) → smbpasswd 対話 → smb.conf 生成 → Avahi service (条件付き) → audit ログ設定 (rsyslog drop-in + logrotate, ENABLE_AUDIT 条件付き) → testparm → `enable --now smbd nmbd avahi-daemon` (+ rsyslog 再起動)
 - `ENABLE_AUDIT="yes"` のとき `vfs_full_audit` を smb.conf に注入し、`/etc/rsyslog.d/40-samba-audit.conf` と `/etc/logrotate.d/samba_audit` を配置、`/var/log/samba/audit.log` を初期化する。`ENABLE_AUDIT="no"` のときはこれらを撤去する (冪等)
-- 監査対象操作: `connect disconnect mkdirat unlinkat renameat fchmod fchown` (Samba 4.18+ の "-at" 系 opname。旧名 `mkdir` 等を書くと `init_bitmap: Could not find opname` で全接続拒否される)。詳細は [ADR-008](../decisions/ADR-008-smb-vfs-full-audit.md)
+- 監査対象操作: `AUDIT_SUCCESS_OPS` で上書き可能。省略時のデフォルトは `connect disconnect mkdirat unlinkat renameat fchmod fchown` (Samba 4.18+ の "-at" 系 opname。旧名 `mkdir` 等を書くと `init_bitmap: Could not find opname` で全接続拒否される)。BackupServer は `"connect disconnect"` で接続ログのみに絞る。詳細は [ADR-008](../decisions/ADR-008-smb-vfs-full-audit.md)
 
 #### `logrotate.sh`
 - 入力 config: `app/config/logrotate/rsync_fileserver.conf` (logrotate 形式そのもの)
