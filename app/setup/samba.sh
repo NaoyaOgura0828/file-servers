@@ -12,6 +12,9 @@ set -euo pipefail
 readonly SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
 readonly SMB_CONF_PATH="/etc/samba/smb.conf"
 readonly AVAHI_SERVICE_PATH="/etc/avahi/services/timemachine.service"
+readonly AUDIT_RSYSLOG_DEST="/etc/rsyslog.d/40-samba-audit.conf"
+readonly AUDIT_LOGROTATE_DEST="/etc/logrotate.d/samba_audit"
+readonly AUDIT_LOG_PATH="/var/log/samba/audit.log"
 
 # ----------------------------------------------------------------------------
 # Helpers
@@ -44,8 +47,13 @@ Ubuntu 26.04 のハイブリッドファイルサーバー / Time Machine スト
   SERVER_NAME / NETBIOS_NAME / WORKGROUP / SERVER_STRING
   SHARE_NAME / SHARE_PATH / SHARE_VALID_USER / SHARE_TIMEMACHINE_MAX_SIZE
   HOSTS_ALLOW / INTERFACES
-  ENABLE_AVAHI / ENABLE_FRUIT
+  ENABLE_AVAHI / ENABLE_FRUIT / ENABLE_AUDIT
   詳細は app/config/samba/sample.conf を参照。
+
+ENABLE_AUDIT="yes" の場合の追加動作:
+  - vfs_full_audit による SMB アクセスログを ${AUDIT_LOG_PATH} へ出力
+  - rsyslog drop-in (${AUDIT_RSYSLOG_DEST}) と logrotate (${AUDIT_LOGROTATE_DEST}) を配置
+  - CloudWatch Agent 設定 (app/config/cloudwatch_agent/) の LOG_PATHS で当該ファイルを参照すること
 
 前提:
   - sudo 実行可能なユーザーで起動
@@ -115,7 +123,7 @@ load_config() {
 
     local required=(SERVER_NAME NETBIOS_NAME WORKGROUP SERVER_STRING
                     SHARE_NAME SHARE_PATH SHARE_VALID_USER
-                    HOSTS_ALLOW ENABLE_AVAHI ENABLE_FRUIT)
+                    HOSTS_ALLOW ENABLE_AVAHI ENABLE_FRUIT ENABLE_AUDIT)
     for v in "${required[@]}"; do
         if [[ -z "${!v:-}" ]]; then
             err "設定ファイルに ${v} が定義されていません: ${INPUT_CONFIG}"
@@ -149,6 +157,11 @@ print_plan() {
     echo ""
     echo "  Avahi (mDNS):         ${ENABLE_AVAHI}"
     echo "  vfs_fruit:            ${ENABLE_FRUIT}"
+    echo "  vfs_full_audit:       ${ENABLE_AUDIT}"
+    if [[ "${ENABLE_AUDIT}" == "yes" ]]; then
+        echo "  監査ログ出力先:       ${AUDIT_LOG_PATH}"
+        echo "  監査対象操作:         connect disconnect mkdir rmdir rename unlink chmod chown"
+    fi
     echo "${sep}"
 }
 
@@ -253,13 +266,18 @@ backup_existing_smb_conf() {
 write_smb_conf() {
     echo "Step 6: ${SMB_CONF_PATH} の生成"
 
+    # vfs_objects に積む module を組み立て (順序: catia fruit streams_xattr full_audit)
+    # full_audit は他 module の変換後の呼び出しを捕捉できるよう末尾に置く。
+    local vfs_modules=()
     local fruit_global=""
     local fruit_share=""
+    local audit_global=""
+
     if [[ "${ENABLE_FRUIT}" == "yes" ]]; then
+        vfs_modules+=(catia fruit streams_xattr)
         fruit_global=$(cat <<EOF
 
    # Time Machine / macOS 互換性 (vfs_fruit)
-   vfs objects = catia fruit streams_xattr
    fruit:nfs_aces = no
    fruit:zero_file_id = yes
    fruit:metadata = stream
@@ -280,6 +298,25 @@ EOF
 EOF
 )
         fi
+    fi
+
+    if [[ "${ENABLE_AUDIT}" == "yes" ]]; then
+        vfs_modules+=(full_audit)
+        audit_global=$(cat <<EOF
+
+   # SMB アクセス監査 (vfs_full_audit) - LOCAL5 経由で ${AUDIT_LOG_PATH} へ出力
+   full_audit:prefix = %u|%I|%S
+   full_audit:success = connect disconnect mkdir rmdir rename unlink chmod chown
+   full_audit:failure = connect
+   full_audit:facility = LOCAL5
+   full_audit:priority = NOTICE
+EOF
+)
+    fi
+
+    local vfs_objects_line=""
+    if [[ ${#vfs_modules[@]} -gt 0 ]]; then
+        vfs_objects_line=$'\n   vfs objects = '"${vfs_modules[*]}"
     fi
 
     local interfaces_line=""
@@ -305,7 +342,7 @@ EOF
    max log size = 50
    server min protocol = SMB2
    ea support = yes
-   hosts allow = ${HOSTS_ALLOW}${interfaces_line}${fruit_global}
+   hosts allow = ${HOSTS_ALLOW}${interfaces_line}${vfs_objects_line}${fruit_global}${audit_global}
 
 [${SHARE_NAME}]
    path = ${SHARE_PATH}
@@ -360,11 +397,60 @@ EOF
 }
 
 # ----------------------------------------------------------------------------
-# Step 8: 設定検証 (testparm)
+# Step 8: 監査ログ用 rsyslog / logrotate 配置 (ENABLE_AUDIT=yes 時のみ)
+# ----------------------------------------------------------------------------
+
+write_audit_log_setup() {
+    if [[ "${ENABLE_AUDIT}" != "yes" ]]; then
+        echo "Step 8: SMB 監査ログ設定はスキップ (ENABLE_AUDIT != yes)"
+        # OFF への切替時に古い drop-in が残っていると意図せず転送が継続するため除去
+        if [[ -f "${AUDIT_RSYSLOG_DEST}" ]]; then
+            sudo rm -f "${AUDIT_RSYSLOG_DEST}"
+            echo "  既存の ${AUDIT_RSYSLOG_DEST} を削除しました。"
+        fi
+        if [[ -f "${AUDIT_LOGROTATE_DEST}" ]]; then
+            sudo rm -f "${AUDIT_LOGROTATE_DEST}"
+            echo "  既存の ${AUDIT_LOGROTATE_DEST} を削除しました。"
+        fi
+        return 0
+    fi
+
+    echo "Step 8: SMB 監査ログ設定 (rsyslog drop-in + logrotate)"
+
+    local rsyslog_src="${SCRIPT_DIR}/../config/rsyslog/samba_audit.conf"
+    local logrotate_src="${SCRIPT_DIR}/../config/logrotate/samba_audit.conf"
+
+    [[ -f "${rsyslog_src}" ]]   || err "rsyslog 設定ファイルが見つかりません: ${rsyslog_src}"
+    [[ -f "${logrotate_src}" ]] || err "logrotate 設定ファイルが見つかりません: ${logrotate_src}"
+
+    # samba パッケージに含まれない環境向けに samba-vfs-modules を担保 (Ubuntu では同梱の場合あり)
+    if ! dpkg -s samba-vfs-modules >/dev/null 2>&1; then
+        sudo apt-get install -y samba-vfs-modules || warn "samba-vfs-modules のインストールに失敗 (samba 本体に含まれていれば動作します)"
+    fi
+
+    sudo install -m 644 -o root -g root "${rsyslog_src}"   "${AUDIT_RSYSLOG_DEST}"
+    echo "  配置: ${AUDIT_RSYSLOG_DEST}"
+    sudo install -m 644 -o root -g root "${logrotate_src}" "${AUDIT_LOGROTATE_DEST}"
+    echo "  配置: ${AUDIT_LOGROTATE_DEST}"
+
+    if [[ ! -f "${AUDIT_LOG_PATH}" ]]; then
+        sudo install -m 640 -o root -g adm /dev/null "${AUDIT_LOG_PATH}"
+        echo "  作成: ${AUDIT_LOG_PATH} (640 root:adm)"
+    fi
+
+    if sudo logrotate -d "${AUDIT_LOGROTATE_DEST}" >/dev/null 2>&1; then
+        echo "  logrotate 構文 OK"
+    else
+        warn "logrotate 構文チェックでエラー。詳細: sudo logrotate -d ${AUDIT_LOGROTATE_DEST}"
+    fi
+}
+
+# ----------------------------------------------------------------------------
+# Step 9: 設定検証 (testparm)
 # ----------------------------------------------------------------------------
 
 test_smb_conf() {
-    echo "Step 8: testparm による smb.conf 構文検証"
+    echo "Step 9: testparm による smb.conf 構文検証"
     if sudo testparm -s "${SMB_CONF_PATH}" >/dev/null 2>&1; then
         echo "  OK"
     else
@@ -375,11 +461,11 @@ test_smb_conf() {
 }
 
 # ----------------------------------------------------------------------------
-# Step 9: サービス起動・自動起動
+# Step 10: サービス起動・自動起動
 # ----------------------------------------------------------------------------
 
 enable_and_restart_services() {
-    echo "Step 9: smbd / nmbd${ENABLE_AVAHI:+ / avahi-daemon} の起動・自動起動"
+    echo "Step 10: smbd / nmbd${ENABLE_AVAHI:+ / avahi-daemon}${ENABLE_AUDIT:+ / rsyslog} の起動・自動起動"
     sudo systemctl enable --now smbd nmbd
     if [[ "${ENABLE_AVAHI}" == "yes" ]]; then
         sudo systemctl enable --now avahi-daemon
@@ -387,6 +473,10 @@ enable_and_restart_services() {
     sudo systemctl restart smbd nmbd
     if [[ "${ENABLE_AVAHI}" == "yes" ]]; then
         sudo systemctl restart avahi-daemon
+    fi
+    # 監査の有効/無効切替に伴う drop-in の追加/削除を反映するため rsyslog を再読込
+    if systemctl list-unit-files rsyslog.service >/dev/null 2>&1; then
+        sudo systemctl restart rsyslog 2>/dev/null || warn "rsyslog の再起動に失敗"
     fi
     echo "  サービス起動完了"
 }
@@ -416,8 +506,21 @@ ${sep}
 サービス管理:
   sudo systemctl restart smbd nmbd
   sudo systemctl restart avahi-daemon
-${sep}
 EOF
+    if [[ "${ENABLE_AUDIT}" == "yes" ]]; then
+        cat <<EOF
+
+SMB 監査ログ (vfs_full_audit):
+  出力先:          ${AUDIT_LOG_PATH}
+  rsyslog drop-in: ${AUDIT_RSYSLOG_DEST}
+  logrotate 設定:  ${AUDIT_LOGROTATE_DEST}
+  ログ形式:        <timestamp> <host> smbd_audit: <user>|<client_ip>|<share>|<op>|ok|<args...>
+  確認:            sudo tail -f ${AUDIT_LOG_PATH}
+  CloudWatch Logs: app/config/cloudwatch_agent/<server>.conf の LOG_PATHS に
+                   "${AUDIT_LOG_PATH}:smb-audit" を含めて cloudwatch_agent.sh を再実行する
+EOF
+    fi
+    echo "${sep}"
 }
 
 # ----------------------------------------------------------------------------
@@ -437,6 +540,7 @@ main() {
     backup_existing_smb_conf
     write_smb_conf
     write_avahi_service
+    write_audit_log_setup
     test_smb_conf
     enable_and_restart_services
     print_summary
