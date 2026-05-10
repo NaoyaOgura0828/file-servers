@@ -160,7 +160,7 @@ print_plan() {
     echo "  vfs_full_audit:       ${ENABLE_AUDIT}"
     if [[ "${ENABLE_AUDIT}" == "yes" ]]; then
         echo "  監査ログ出力先:       ${AUDIT_LOG_PATH}"
-        echo "  監査対象操作:         connect disconnect mkdir rmdir rename unlink chmod chown"
+        echo "  監査対象操作:         connect disconnect mkdirat unlinkat renameat fchmod fchown"
     fi
     echo "${sep}"
 }
@@ -305,8 +305,10 @@ EOF
         audit_global=$(cat <<EOF
 
    # SMB アクセス監査 (vfs_full_audit) - LOCAL5 経由で ${AUDIT_LOG_PATH} へ出力
+   # opname は Samba 4.18+ の VFS "-at" 系統合に追従 (mkdirat / unlinkat / renameat / fchmod / fchown)
+   # unlinkat は rmdir と unlink の双方を包括する。
    full_audit:prefix = %u|%I|%S
-   full_audit:success = connect disconnect mkdir rmdir rename unlink chmod chown
+   full_audit:success = connect disconnect mkdirat unlinkat renameat fchmod fchown
    full_audit:failure = connect
    full_audit:facility = LOCAL5
    full_audit:priority = NOTICE
